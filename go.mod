@@ -1,10 +1,13 @@
 module github.com/omerhorev/gobash
+ 
+
 
 go 1.18
 
 require github.com/stretchr/testify v1.8.0
 
 replace github.com/omerhorev/gobash/mocks => ./mock
+replace github.com/omerhorev/gobash/ast => ./ast
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect

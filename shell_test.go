@@ -2,6 +2,7 @@ package gobash
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -81,60 +82,17 @@ import (
 // 	}
 // }
 
-func TestToken(t *testing.T) {
+func TestRdp(t *testing.T) {
 	s, _, _, _ := createTestShell("")
-
-	// operators
-	testTokens(t, s, "ls", "ls")
-	testTokens(t, s, "ls>file", "ls", ">", "file")       // single char operator
-	testTokens(t, s, "ls>>file", "ls", ">>", "file")     // multi char operator
-	testTokens(t, s, "ls > file", "ls", ">", "file")     // operator with space
-	testTokens(t, s, "ls   >   file", "ls", ">", "file") // operator with multi-space
-
-	// words
-	testTokens(t, s, "x yy zzz", "x", "yy", "zzz")       // words
-	testTokens(t, s, "x yy    zzz   ", "x", "yy", "zzz") // words with multi-space
-
-	// escaping
-	testTokens(t, s, `x\ y`, `x\ y`)              // escape
-	testTokens(t, s, `x\ y z\ t`, `x\ y`, `z\ t`) // multi-escape
-	testTokens(t, s, `x\ yz\ t`, `x\ yz\ t`)      // multi-escape, same word
-	testTokens(t, s, `x\\y`, `x\\y`)              // escape backslash
-	testTokens(t, s, `x\>y`, `x\>y`)              // escape operator
-	testTokens(t, s, `x>\>y`, `x`, `>`, `\>y`)    // escape operator, middle
-
-	// quotes
-	testTokens(t, s, `"x"`, `"x"`)                                     // quote
-	testTokens(t, s, `"x y"`, `"x y"`)                                 // quote with space
-	testTokens(t, s, `"x"'y''z' "a"'b'`, `"x"'y''z'`, `"a"'b'`)        // quote joined
-	testTokens(t, s, `"x y""t" abc`, `"x y""t"`, "abc")                // quote with space, joined with another quote
-	testTokens(t, s, `"abc \"t" a`, `"abc \"t"`, "a")                  // escaped quote inside a quote
-	testTokens(t, s, `a\"y z`, `a\"y`, "z")                            // escaped quote
-	testTokens(t, s, `abc ">" z`, `abc`, `">"`, `z`)                   // quoted operator
-	testTokens(t, s, `0"1\"2\\\"3\\\"2\"1"0`, `0"1\"2\\\"3\\\"2\"1"0`) // quote inside quote
-	testTokens(t, s, `ls "file with ' "`, `ls`, `"file with ' "`)      // quote inside quote
-	testTokens(t, s, `ls 'file with " '`, `ls`, `'file with " '`)      // quote inside quote
-	testTokens(t, s, `'\' 'x'`, `'\'`, `'x'`)                          // backslash inside quote
-	testTokens(t, s, `"\"" 'x'`, `"\""`, `'x'`)                        // backslash inside quote
-
-	// unterminated quote
-	_, err := s.tokenizeLine(`"abc`)
-	assert.True(t, IsSyntaxError(err))
-	assert.ErrorIs(t, err, ErrUnterminatedQuotedString)
-
-	// unterminated quote
-	_, err = s.tokenizeLine(`'abc`)
-	assert.True(t, IsSyntaxError(err))
-	assert.ErrorIs(t, err, ErrUnterminatedQuotedString)
+	// noSyntaxError(t, s, "")
+	// noSyntaxError(t, s, "\n")
+	// noSyntaxError(t, s, "a")
+	// noSyntaxError(t, s, "a; b")
+	// noSyntaxError(t, s, "a\nb")
+	noSyntaxError(t, s, "a &&")
+	// noSyntaxError(t, s, "a | b")
 }
 
-func TestRun(t *testing.T) {
-	s, _, _, _ := createTestShell("")
-	s.RunStringContext(context.Background(), "ls")
-}
-
-func testTokens(t *testing.T, s *Shell, line string, tokens ...string) {
-	foundTokens, err := s.tokenizeLine(line)
-	assert.NoError(t, err)
-	assert.Equal(t, append([]string{}, tokens...), foundTokens)
+func noSyntaxError(t *testing.T, s *Shell, text string) {
+	assert.NoError(t, s.RunContext(context.Background(), strings.NewReader(text)))
 }

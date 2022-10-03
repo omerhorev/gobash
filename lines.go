@@ -13,7 +13,7 @@ var (
 	DefaultBufferReadSize = 4096
 )
 
-// lineReader is used to read lines as defined in IEEE1003.1
+// LineReader is used to read lines as defined in IEEE1003.1
 // The struct can be initialized via NewLineReader
 //
 // briefly, LineReader reads line by line, while supporting line end escaping using
