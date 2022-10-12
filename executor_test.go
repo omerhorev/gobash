@@ -1,48 +1,77 @@
 package gobash
 
-// import (
-// 	"io"
-// 	"testing"
+import (
+	"bytes"
+	"io"
+	"testing"
 
-// 	"github.com/omerhorev/gobash/ast"
-// 	"github.com/stretchr/testify/assert"
-// )
+	"github.com/omerhorev/gobash/ast"
+	"github.com/stretchr/testify/require"
+)
 
-// func TestExecutor(t *testing.T) {
-// 	e := NewExecutor(
-// 		ExecutorSettings{},
-// 		ast.Program{
-// 			Commands: []ast.{
-// 				&ast.SimpleCommand{
-// 					Word: "ls",
-// 					PipeTo: &ast.SimpleCommand{
-// 						Word: "grep",
-// 						IORedirect: &ast.IORedirectFile{
-// 							Path: "/tmp/file",
-// 						},
-// 					},
-// 				},
-// 				&ast.SimpleCommand{
-// 					Word:   "cat",
-// 					PipeTo: nil,
-// 				},
-// 			},
-// 		},
-// 	)
+func TestExecutorPipe(t *testing.T) {
+	executor := createTestExecutor()
+	b := bytes.Buffer{}
+	executor.Stdout = &b
 
-// 	e.Register(&Cmd{
-// 		Name: "ls",
-// 		f: func(stdin io.Reader, stdout, stderr io.Writer) (int, error) {
-// 			return 0, nil
-// 		},
-// 	})
+	executor.Run(&ast.Program{
+		Commands: []ast.Node{
+			&ast.Pipe{
+				Commands: []ast.Node{
+					&ast.SimpleCommand{
+						Word: "echo",
+						Args: []string{"a", "b", "c"},
+					},
+					&ast.SimpleCommand{
+						Word: "rev",
+					},
+				},
+			},
+		},
+	})
 
-// 	e.Register(&Cmd{
-// 		Name: "cat",
-// 		f: func(stdin io.Reader, stdout, stderr io.Writer) (int, error) {
-// 			return 0, nil
-// 		},
-// 	})
+	require.Equal(t, "c b a", b.String())
+}
 
-// 	assert.NoError(t, e.Run())
-// }
+func createTestExecutor() *Executor {
+	e := NewExecutor(ExecutorSettings{})
+
+	e.RegisterCommand(&Cmd{
+		Name: "echo",
+		Run: func(args []string, env *CommandExecEnv) int {
+			args = args[1:]
+			for i, a := range args {
+				env.Stdout().Write([]byte(a))
+				if i < len(args)-1 {
+					env.Stdout().Write([]byte(" "))
+				}
+			}
+
+			return 0
+		},
+	})
+
+	e.RegisterCommand(&Cmd{
+		Name: "rev",
+		Run: func(args []string, env *CommandExecEnv) int {
+			if len(args) != 1 {
+				return 1
+			}
+
+			buf, err := io.ReadAll(env.Stdin())
+			if err != nil {
+				return 1
+			}
+
+			for i, j := 0, len(buf)-1; i < j; i, j = i+1, j-1 {
+				buf[i], buf[j] = buf[j], buf[i]
+			}
+
+			env.Stdout().Write(buf)
+
+			return 0
+		},
+	})
+
+	return e
+}

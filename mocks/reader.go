@@ -2,31 +2,31 @@ package mocks
 
 import "io"
 
-// Hook type that will be called on the entrance to a read method.
-// If the method returns an error, the execution will be stopped and the
+// Hook type that will be called at the entrance to a Read method.
+// If the method returns an error, the execution will be stopped, and the
 // error and n will be returned
 type ReadEntryHook func(r *MockReader, data []byte) (n int, err error)
 
-// Hook type that will be called on the exit from a read method.
-// The original return values and argument are passed to this method
-// This method return values will be passed instead of the original read
+// Hook type that will be called at the exit from a Read method.
+// The original return values and argument are passed to this method,
+// and the method return values will be passed instead of the original read
 type ReadExitHook func(r *MockReader, data []byte, n int, err error) (newN int, newErr error)
 
-// MockReader is an testing helper class that allows to mock various
+// MockReader is a testing helper class that allows to mock various
 // reader's read errors.
 //
 // It allows to set hooks after and before reads and alter the input/output
 type MockReader struct {
 	Reader io.Reader // The original io.Reader
 
-	// The amount of times the original io.Reader was called
-	// This value is increased after the original io.Reader Read method is called
-	// The exit hook is caled before this value is increased
+	// The number of times the original io.Reader was called.
+	// This value is increased after the original io.Reader Read method is called.
+	// The exit hook is called before this value is increased.
 	ReadCalls int
 
-	// The amount of data read from the original io.Reader so far
-	// This value is increased after the original io.Reader Read method is called
-	// The exit hook is caled after this value is increased
+	// The number of data read from the original io.Reader so far.
+	// This value is increased after the original io.Reader Read method is called.
+	// The exit hook is called after this value is increased.
 	DataRead int
 
 	ReadEntryHook ReadEntryHook // The read entry hook
@@ -74,8 +74,8 @@ func (r *MockReader) readExitHook(data []byte, n int, err error) (int, error) {
 	return r.ReadExitHook(r, data, n, err)
 }
 
-// Return io.ErrUnexpectedEOF after the before the n call to the
-// original io.Reader Read method
+// Return io.ErrUnexpectedEOF before the Nth call to the
+// original io.Reader Read method.
 func UnexpectedEOFBeforeCall(n int) ReadEntryHook {
 	return func(r *MockReader, data []byte) (int, error) {
 		if r.ReadCalls == n {

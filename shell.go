@@ -16,7 +16,6 @@ type Shell struct {
 	execEnv *ExecEnv
 
 	reader *bufio.Reader // the script/line/interactive reader
-	token  *Token        // the current token in the recursice discect parsing algorithm
 }
 
 func NewShell(stdin io.Reader, stdout io.Writer, stderr io.Writer) *Shell {

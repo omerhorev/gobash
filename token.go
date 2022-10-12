@@ -9,11 +9,11 @@ var (
 	}
 
 	reservedWordsStrings = []string{
-		"!",
+		"!", "{", "}", "case", "do", "done", "elif", "else",
+		"esac", "fi", "for", "if", "in", "then", "until", "while",
 	}
 )
 
-// Represents a token type that is used in the grammatical processing of the tokens
 type TokenIdentifier string
 
 var (
@@ -37,31 +37,31 @@ var (
 	tokenIdentifierClobber        = TokenIdentifier(">|")
 )
 
-// Represents a part of the string that is a product of the tokenizer.
-// the token is used in the grammatical processing of the shell expression and is later
+// The Tokken Represents a part of the string produced by the Tokenizer.
+// The Token is used in the grammatical processing of shell expressions and is later
 // transformed into AST by the Parser.
 type Token struct {
 	Value      string          // The actual value of the token
 	Identifier TokenIdentifier // The type of token
 }
 
-// return whether a token is of specific type
+// Returns whether a token is of specific type.
 func (t Token) Is(identifier TokenIdentifier) bool {
 	return t.Identifier == identifier
 }
 
-// return wether the token is EOF token
+// Returns wether the token is EOF token.
 func (t Token) IsEOF() bool {
 	return t.Is(tokenIdentifierEOF)
 }
 
-// Returns whether the token is all numbers
+// Returns whether the token is all numbers.
 func (t Token) IsAllNumbers() bool {
 	return isStringNumber(t.Value)
 }
 
-// assignment-word tokens are context dependent. try upgrading this token to
-// assignment-word if possible. returns whether the upgrade was successful.
+// Assignment-Word tokens are context-dependent. Try upgrading this token to
+// assignment-word if possible. Returns whether the upgrade was successful or not.
 func (t *Token) tryUpgradeToAssignmentWord() bool {
 	if t.Identifier != tokenIdentifierWord {
 		return false
@@ -80,10 +80,31 @@ func (t *Token) tryUpgradeToAssignmentWord() bool {
 	for _, r := range t.Value {
 		if !isNameRune(r) {
 			if isEqualSign(r) {
-				t.Identifier = tokenIdentifierWord
+				t.Identifier = tokenIdentifierAssignmentWord
 				return true
 			}
 		}
+	}
+
+	return false
+}
+
+// Reserved-Word tokens are context-dependent. Try upgrading this token to
+// Reserved-word if possible. Returns whether the upgrade was successful or not.
+func (t *Token) tryUpgradeToReservedWord() bool {
+	if t.Identifier != tokenIdentifierWord {
+		return false
+	}
+
+	for _, r := range reservedWordsStrings {
+		if r == t.Value {
+			t.Identifier = TokenIdentifier(r)
+		}
+	}
+	if t.Value == "!" {
+		t.Identifier = tokenIdentifierBang
+
+		return true
 	}
 
 	return false
@@ -97,13 +118,6 @@ func newTokenFromString(value string, delimitedBy rune) *Token {
 	for _, op := range operatorsStrings {
 		if value == op {
 			identifier = TokenIdentifier(op)
-			break
-		}
-	}
-
-	for _, resw := range reservedWordsStrings {
-		if value == resw {
-			identifier = TokenIdentifier(resw)
 			break
 		}
 	}
