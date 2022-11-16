@@ -1,6 +1,7 @@
 package gobash
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/omerhorev/gobash/ast"
@@ -51,9 +52,10 @@ ls&x;ls&
 						&ast.SimpleCommand{
 							Word:        "'c'",
 							Assignments: map[string]string{},
-							Redirects: map[int]*ast.SimpleCommandIORedirection{
-								1: {
-									Mode:  ast.SimpleCommandIORedirectionModeOutput,
+							Redirects: []*ast.IORedirection{
+								{
+									Fd:    1,
+									Mode:  ast.IORedirectionModeOutput,
 									Value: "1",
 								},
 							},
@@ -63,9 +65,10 @@ ls&x;ls&
 							Assignments: map[string]string{
 								"A": "1",
 							},
-							Redirects: map[int]*ast.SimpleCommandIORedirection{
-								4: {
-									Mode:  ast.SimpleCommandIORedirectionModeInputFd,
+							Redirects: []*ast.IORedirection{
+								{
+									Fd:    4,
+									Mode:  ast.IORedirectionModeInputFd,
 									Value: 2,
 								},
 							},
@@ -76,12 +79,12 @@ ls&x;ls&
 					Left: &ast.SimpleCommand{
 						Word:        "c",
 						Assignments: map[string]string{},
-						Redirects:   map[int]*ast.SimpleCommandIORedirection{},
+						Redirects:   []*ast.IORedirection{},
 					},
 					Right: &ast.SimpleCommand{
 						Word:        "y",
 						Assignments: map[string]string{},
-						Redirects:   map[int]*ast.SimpleCommandIORedirection{},
+						Redirects:   []*ast.IORedirection{},
 					},
 					Type: ast.BinaryTypeOr,
 				},
@@ -91,19 +94,19 @@ ls&x;ls&
 				Child: &ast.SimpleCommand{
 					Word:        "ls",
 					Assignments: map[string]string{},
-					Redirects:   map[int]*ast.SimpleCommandIORedirection{},
+					Redirects:   []*ast.IORedirection{},
 				},
 			},
 			&ast.SimpleCommand{
 				Word:        "x",
 				Assignments: map[string]string{},
-				Redirects:   map[int]*ast.SimpleCommandIORedirection{},
+				Redirects:   []*ast.IORedirection{},
 			},
 			&ast.Background{
 				Child: &ast.SimpleCommand{
 					Word:        "ls",
 					Assignments: map[string]string{},
-					Redirects:   map[int]*ast.SimpleCommandIORedirection{},
+					Redirects:   []*ast.IORedirection{},
 				},
 			},
 		},
@@ -117,13 +120,13 @@ func TestParserNot(t *testing.T) {
 			&ast.SimpleCommand{
 				Word:        "x",
 				Assignments: map[string]string{},
-				Redirects:   map[int]*ast.SimpleCommandIORedirection{},
+				Redirects:   []*ast.IORedirection{},
 			},
 			&ast.Not{
 				Child: &ast.SimpleCommand{
 					Word:        "y",
 					Assignments: map[string]string{},
-					Redirects:   map[int]*ast.SimpleCommandIORedirection{},
+					Redirects:   []*ast.IORedirection{},
 				},
 			},
 		},
@@ -144,9 +147,10 @@ func TestParserASTArguments(t *testing.T) {
 					&ast.SimpleCommand{
 						Word: "y",
 						Args: []string{"a", "b", "c"},
-						Redirects: map[int]*ast.SimpleCommandIORedirection{
-							0: {
-								Mode:  ast.SimpleCommandIORedirectionModeInput,
+						Redirects: []*ast.IORedirection{
+							{
+								Fd:    0,
+								Mode:  ast.IORedirectionModeInput,
 								Value: "1",
 							},
 						},
@@ -165,25 +169,30 @@ func TestParserASTRedirects(t *testing.T) {
 			&ast.SimpleCommand{
 				Word:        "x",
 				Assignments: map[string]string{},
-				Redirects: map[int]*ast.SimpleCommandIORedirection{
-					1: {
-						Mode:  ast.SimpleCommandIORedirectionModeOutput,
+				Redirects: []*ast.IORedirection{
+					{
+						Fd:    0,
+						Mode:  ast.IORedirectionModeInput,
 						Value: "1",
 					},
-					0: {
-						Mode:  ast.SimpleCommandIORedirectionModeInput,
+					{
+						Fd:    1,
+						Mode:  ast.IORedirectionModeOutput,
 						Value: "1",
 					},
-					2: {
-						Mode:  ast.SimpleCommandIORedirectionModeInput,
+					{
+						Fd:    2,
+						Mode:  ast.IORedirectionModeInput,
 						Value: "1",
 					},
-					3: {
-						Mode:  ast.SimpleCommandIORedirectionModeInputOutput,
+					{
+						Fd:    3,
+						Mode:  ast.IORedirectionModeInputOutput,
 						Value: "1",
 					},
-					4: {
-						Mode:  ast.SimpleCommandIORedirectionModeOutputAppend,
+					{
+						Fd:    4,
+						Mode:  ast.IORedirectionModeOutputAppend,
 						Value: "1",
 					},
 				},
@@ -191,21 +200,25 @@ func TestParserASTRedirects(t *testing.T) {
 			&ast.SimpleCommand{
 				Word:        "",
 				Assignments: map[string]string{},
-				Redirects: map[int]*ast.SimpleCommandIORedirection{
-					0: {
-						Mode:  ast.SimpleCommandIORedirectionModeInputFd,
+				Redirects: []*ast.IORedirection{
+					{
+						Fd:    0,
+						Mode:  ast.IORedirectionModeInputFd,
 						Value: 1,
 					},
-					1: {
-						Mode:  ast.SimpleCommandIORedirectionModeOutputFd,
+					{
+						Fd:    1,
+						Mode:  ast.IORedirectionModeOutputFd,
 						Value: 1,
 					},
-					2: {
-						Mode:  ast.SimpleCommandIORedirectionModeOutputForce,
+					{
+						Fd:    2,
+						Mode:  ast.IORedirectionModeOutputForce,
 						Value: "1",
 					},
-					10: {
-						Mode:  ast.SimpleCommandIORedirectionModeInput,
+					{
+						Fd:    10,
+						Mode:  ast.IORedirectionModeInput,
 						Value: "2",
 					},
 				},
@@ -233,7 +246,7 @@ func parserTest(t *testing.T, text string) {
 
 func parserTestError(t *testing.T, text string) {
 	p := parseDefaultText(t, text)
-	require.Error(t, p.Error())
+	require.ErrorIs(t, p.Error(), newSyntaxError(errors.New("x")))
 }
 
 func parseDefaultText(t *testing.T, text string) *Parser {
@@ -323,9 +336,12 @@ func requireSimpleCmd(t *testing.T, node ast.Node, expectedCmd *ast.SimpleComman
 		require.Equal(t, v, cmd.Assignments[k])
 	}
 
-	for k, v := range expectedCmd.Redirects {
-		require.Contains(t, cmd.Redirects, k)
-		require.Equal(t, cmd.Redirects[k].Mode, v.Mode)
-		require.Equal(t, cmd.Redirects[k].Value, v.Value)
+	require.Equal(t, len(cmd.Redirects), len(expectedCmd.Redirects))
+	for i := range expectedCmd.Redirects {
+		require.Equal(t, cmd.Redirects[i].Fd, expectedCmd.Redirects[i].Fd)
+		require.Equal(t, cmd.Redirects[i].Mode, expectedCmd.Redirects[i].Mode)
+		require.Equal(t, cmd.Redirects[i].Value, expectedCmd.Redirects[i].Value)
+		// require.Equal(t, cmd.Redirects[k].Mode, v.Mode)
+		// require.Equal(t, cmd.Redirects[k].Value, v.Value)
 	}
 }

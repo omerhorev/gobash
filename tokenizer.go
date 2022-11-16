@@ -14,7 +14,7 @@ var (
 	defaultLongTokensCount  = 200
 )
 
-// used to alter the behaviour of the tokenizer
+// used to alter the behavior of the tokenizer
 type TokenizerSettings struct {
 	// used for tokens memory allocation
 	// can speed up the tokenizing process in expense of memory usage
@@ -23,7 +23,7 @@ type TokenizerSettings struct {
 
 // tokenizer is a structure that receives a stream and produces tokens
 // it is used to parse shell scripts and expressions into tokens
-// that can be used in grammer
+// that can be used in grammar
 type Tokenizer struct {
 	reader   *bufio.Reader
 	settings TokenizerSettings
@@ -271,8 +271,18 @@ func (t *Tokenizer) readToken() (*Token, error) {
 	}
 
 	if isApostrophed || isQuotationMarked {
-		return nil, NewSyntaxError(ErrUnterminatedQuotedString)
+		return nil, newSyntaxError(errors.New("unterminated error string"))
 	}
 
 	return newTokenFromString(tokenStr, utf8.RuneError), nil
+}
+
+func canBeUsedInOperator(token string) bool {
+	for _, o := range operatorsStrings {
+		if strings.HasPrefix(o, token) {
+			return true
+		}
+	}
+
+	return false
 }

@@ -1,5 +1,5 @@
 # gobash
-Golang IEEE 1003.1 compilant fully customizable shell package
+Golang IEEE 1003.1 compliant fully customizable shell package
 
-## Key Diffrences:
+## Key Differences:
 - **Errors**: Different error strings

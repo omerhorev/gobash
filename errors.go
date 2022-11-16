@@ -5,20 +5,16 @@ import (
 	"fmt"
 )
 
-var ErrUnterminatedQuotedString = errors.New("unterminated quoted string")
+var errUnterminatedQuotedString = errors.New("unterminated quoted string")
 
-type SyntaxError struct {
-	Err error
-}
+type SyntaxError struct{ Err error }
 
-// Creates a new syntax error from an existing error
-func NewSyntaxError(err error) SyntaxError {
+func newSyntaxError(err error) SyntaxError {
 	return SyntaxError{
 		Err: err,
 	}
 }
 
-// Returns whether the error provided is a syntax error
 func IsSyntaxError(err error) bool {
 	return errors.Is(err, SyntaxError{})
 }
@@ -33,5 +29,76 @@ func (err SyntaxError) Unwrap() error {
 
 func (err SyntaxError) Is(err2 error) bool {
 	_, ok := err2.(SyntaxError)
+	return ok
+}
+
+type IoRedirectionError struct{ Err error }
+
+func IsIORedirectionError(err error) bool {
+	return errors.Is(err, IoRedirectionError{})
+}
+
+func newIORedirectionError(err error) IoRedirectionError {
+	return IoRedirectionError{
+		Err: err,
+	}
+}
+
+func (err IoRedirectionError) Error() (description string) {
+	return fmt.Sprintf("io error: %s", err.Err.Error())
+}
+
+func (err IoRedirectionError) Unwrap() error {
+	return err.Err
+}
+
+func (err IoRedirectionError) Is(err2 error) bool {
+	_, ok := err2.(IoRedirectionError)
+	return ok
+}
+
+type BuiltinError struct{ Err error }
+
+func IsBuiltinError(err error) bool {
+	return errors.Is(err, BuiltinError{})
+}
+
+func newBuiltinError(err error) BuiltinError {
+	return BuiltinError{
+		Err: err,
+	}
+}
+
+func (err BuiltinError) Error() string {
+	return "" // see 2.8.1 Consequences of Shell Errors
+}
+
+func (err BuiltinError) Unwrap() error {
+	return err.Err
+}
+
+func (err BuiltinError) Is(err2 error) bool {
+	_, ok := err2.(BuiltinError)
+	return ok
+}
+
+type UnknownCommandError struct{ Command string }
+
+func IsUnknownCommandError(err error) bool {
+	return errors.Is(err, UnknownCommandError{Command: ""})
+}
+
+func newUnknownCommandError(command string) UnknownCommandError {
+	return UnknownCommandError{
+		Command: command,
+	}
+}
+
+func (err UnknownCommandError) Error() string {
+	return fmt.Sprintf("%s: command not found", err.Command)
+}
+
+func (err UnknownCommandError) Is(err2 error) bool {
+	_, ok := err2.(UnknownCommandError)
 	return ok
 }

@@ -1,0 +1,13 @@
+Alias subsitution
+Parameter expansion
+Alias resolve
+noclobber and >|
+different error strings
+
+differences:
+
+settings:
+    open file
+    strict (unknown command fails script) TODO:
+    print error on unknown command TODO:
+    DisableFileOpen

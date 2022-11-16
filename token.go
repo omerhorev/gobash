@@ -20,7 +20,7 @@ var (
 	tokenIdentifierEOF            = TokenIdentifier("<eof>")
 	tokenIdentifierWord           = TokenIdentifier("<word>")
 	tokenIdentifierAssignmentWord = TokenIdentifier("<assignment_word>")
-	tokenIdentifierIONumber       = TokenIdentifier("<ionumber>")
+	tokenIdentifierIONumber       = TokenIdentifier("<io>")
 	tokenIdentifierNewline        = TokenIdentifier("\n")
 	tokenIdentifierAnd            = TokenIdentifier("&")
 	tokenIdentifierSemicolon      = TokenIdentifier(";")
@@ -37,7 +37,7 @@ var (
 	tokenIdentifierClobber        = TokenIdentifier(">|")
 )
 
-// The Tokken Represents a part of the string produced by the Tokenizer.
+// The Token Represents a part of the string produced by the Tokenizer.
 // The Token is used in the grammatical processing of shell expressions and is later
 // transformed into AST by the Parser.
 type Token struct {

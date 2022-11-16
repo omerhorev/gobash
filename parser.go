@@ -57,7 +57,7 @@ func (p *Parser) AST() ast.Node {
 }
 
 func (p *Parser) error(format string, args ...any) {
-	p.err = NewSyntaxError(errors.Errorf(format, args...))
+	p.err = newSyntaxError(errors.Errorf(format, args...))
 }
 
 func (p *Parser) current() *Token {
@@ -223,7 +223,7 @@ func (p *Parser) andOr() (node ast.Node, ok bool) {
 	return binary, true
 }
 
-// derived from the and_or grammer rule
+// derived from the and_or grammar rule
 func (p *Parser) andOrBinaryType() (BinaryType ast.BinaryType, ok bool) {
 	if p.accept(tokenIdentifierDAnd) {
 		return ast.BinaryTypeAnd, true
@@ -237,7 +237,7 @@ func (p *Parser) andOrBinaryType() (BinaryType ast.BinaryType, ok bool) {
 }
 
 // this represents both the pipeline and pipeline_sequence syntax because
-// it can be simplefied if not using a recursion
+// it can be simplified if not using a recursion
 func (p *Parser) pipeline() (ast.Node, bool) {
 	b := p.backup()
 
@@ -387,7 +387,7 @@ func (p *Parser) cmdName(cmd *ast.SimpleCommand) bool {
 func (p *Parser) ioRedirect(cmd *ast.SimpleCommand) (ok bool) {
 	b := p.backup()
 
-	a := &ast.SimpleCommandIORedirection{}
+	a := &ast.IORedirection{}
 	var fdSet *int = nil
 
 	if p.accept(tokenIdentifierIONumber) {
@@ -407,10 +407,10 @@ func (p *Parser) ioRedirect(cmd *ast.SimpleCommand) (ok bool) {
 		return false
 	}
 
-	a.Mode = ast.SimpleCommandIORedirectionMode(p.prev().Value)
+	a.Mode = ast.IORedirectionMode(p.prev().Value)
 
-	if a.Mode == ast.SimpleCommandIORedirectionModeInputFd ||
-		a.Mode == ast.SimpleCommandIORedirectionModeOutputFd {
+	if a.Mode == ast.IORedirectionModeInputFd ||
+		a.Mode == ast.IORedirectionModeOutputFd {
 		if fd, err := strconv.Atoi(p.current().Value); err != nil {
 			p.error("bad fd number")
 			p.restore(b)
@@ -427,7 +427,8 @@ func (p *Parser) ioRedirect(cmd *ast.SimpleCommand) (ok bool) {
 		to = *fdSet
 	}
 
-	cmd.Redirects[to] = a
+	a.Fd = to
+	cmd.Redirects = append(cmd.Redirects, a)
 
 	p.consume()
 
@@ -455,7 +456,7 @@ func (s *Parser) newlineList() bool {
 	return true
 }
 
-// in the grammer this is a terminal. it will be represented
+// in the grammar this is a terminal. it will be represented
 // here as a non-terminal to parse context depended information
 func (p *Parser) assignmentWord() (string, string, bool) {
 	if p.current().tryUpgradeToAssignmentWord() { // rule 7b

@@ -9,34 +9,24 @@ func isNewLine(r rune) bool {
 	return r == '\n'
 }
 
-// Returns whether the characted is an IEEE1003.1 escape code (backslash).
+// Returns whether the character is an IEEE1003.1 escape code (backslash).
 func isEscape(r rune) bool {
 	return r == '\\'
 }
 
-// Returns whether the characted is an apostrophe U+0027.
+// Returns whether the character is an apostrophe U+0027.
 func isApostrophe(r rune) bool {
 	return r == '\''
 }
 
-// Returns whether the characted is a quotation mark U+0022.
+// Returns whether the character is a quotation mark U+0022.
 func isQuotationMark(r rune) bool {
 	return r == '"'
 }
 
-// Returns whether the characted is a grave accent U+0060.
-func isGraveAccent(r rune) bool {
-	return r == '`'
-}
-
-// Returns whether the characted is a number sign U+0023.
+// Returns whether the character is a number sign U+0023.
 func isNumberSign(r rune) bool {
 	return r == '#'
-}
-
-// Returns whether the characted is a dollar sign U+0024.
-func isDollarSign(r rune) bool {
-	return r == '$'
 }
 
 // Returns whether a string is an unsigned number.
