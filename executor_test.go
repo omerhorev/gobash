@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/omerhorev/gobash/ast"
-	"github.com/omerhorev/gobash/cmd"
+	"github.com/omerhorev/gobash/command"
 	"github.com/omerhorev/gobash/mocks"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -38,6 +38,17 @@ func TestExecutorPipe(t *testing.T) {
 	require.Equal(t, "c b a", b.String())
 
 	require.Error(t, executor.Run(&ast.Program{Commands: []ast.Node{&ast.Pipe{}}}))
+
+	require.NoError(t, executor.Run(&ast.Program{
+		Commands: []ast.Node{
+			&ast.Pipe{
+				Commands: []ast.Node{
+					&ast.SimpleCommand{Word: "echo"},
+					&ast.SimpleCommand{Word: "echo"},
+				},
+			},
+		},
+	}))
 }
 
 func TestExecutorCommands(t *testing.T) {
@@ -55,13 +66,13 @@ func TestExecutorCommands(t *testing.T) {
 
 	executor.Settings.StopOnUnknownCommand = true
 	require.Error(t, executor.Run(prog))
-	require.Equal(t, "unknown: command not found", bufferStderr.String())
+	require.Equal(t, "unknown: command not found\n", bufferStderr.String())
 
 	bufferStderr.Reset()
 
 	executor.Settings.StopOnUnknownCommand = false
 	require.NoError(t, executor.Run(prog))
-	require.Equal(t, "unknown: command not found", bufferStderr.String())
+	require.Equal(t, "unknown: command not found\n", bufferStderr.String())
 }
 
 func TestExecutorIORedirection(t *testing.T) {
@@ -126,8 +137,8 @@ func TestExecutorIORedirection(t *testing.T) {
 	require.Contains(t, files, "output/1")
 	require.Contains(t, files, "output/2")
 	require.Contains(t, files, "output/3")
-	require.Equal(t, "12", files["output/1"].String())
-	require.Equal(t, "fd_io_redirect", files["output/2"].String())
+	require.Equal(t, "1\n2\n", files["output/1"].String())
+	require.Equal(t, "fd_io_redirect\n", files["output/2"].String())
 	require.Equal(t, "321", files["output/3"].String())
 
 	progErrorIORedirectionFile := &ast.Program{
@@ -148,16 +159,16 @@ func TestExecutorIORedirection(t *testing.T) {
 
 	executor.Settings.StopOnIORedirectionError = true
 	require.ErrorIs(t, executor.Run(progErrorIORedirectionFile), newIORedirectionError(errors.New("some error")))
-	require.Equal(t, "io error: missing_file: file does not exist", bufferStderr.String())
+	require.Equal(t, "io error: missing_file: file does not exist\n", bufferStderr.String())
 	bufferStderr.Reset()
 
 	require.ErrorIs(t, executor.Run(progErrorIORedirectionFd), newIORedirectionError(errors.New("some error")))
-	require.Equal(t, "io error: 22: bad file descriptor", bufferStderr.String())
+	require.Equal(t, "io error: 22: bad file descriptor\n", bufferStderr.String())
 	bufferStderr.Reset()
 
 	executor.Settings.StopOnIORedirectionError = false
 	require.NoError(t, executor.Run(progErrorIORedirectionFile))
-	require.Equal(t, "io error: missing_file: file does not exist", bufferStderr.String())
+	require.Equal(t, "io error: missing_file: file does not exist\n", bufferStderr.String())
 	bufferStderr.Reset()
 }
 
@@ -176,7 +187,7 @@ func TestExecutorBinary(t *testing.T) {
 		},
 	})
 
-	require.Equal(t, "1", b.String())
+	require.Equal(t, "1\n", b.String())
 	b.Reset()
 
 	executor.Run(&ast.Program{
@@ -215,7 +226,7 @@ func TestExecutorBinary(t *testing.T) {
 		},
 	})
 
-	require.Equal(t, "1", b.String())
+	require.Equal(t, "1\n", b.String())
 	b.Reset()
 }
 
@@ -290,7 +301,7 @@ func TestExecutorEnv(t *testing.T) {
 
 func createTestExecutor() *Executor {
 	e := NewExecutor(ExecutorSettings{})
-	e.AddCommands(cmd.Default...)
+	e.AddCommands(command.Default...)
 
 	return e
 }

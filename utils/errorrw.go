@@ -31,15 +31,15 @@ func (e ErrorReadWriterErrR) Close() error {
 // A ReadWriter that returns ErrUnsupportedIO for write operations
 type ErrorReadWriterErrW struct{ io.Reader }
 
-func (e *ErrorReadWriterErrW) Write(p []byte) (n int, err error) {
+func (e ErrorReadWriterErrW) Write(p []byte) (n int, err error) {
 	return 0, ErrUnsupportedIO
 }
 
-func (e *ErrorReadWriterErrW) Read(p []byte) (n int, err error) {
+func (e ErrorReadWriterErrW) Read(p []byte) (n int, err error) {
 	return e.Reader.Read(p)
 }
 
-func (e *ErrorReadWriterErrW) Close() error {
+func (e ErrorReadWriterErrW) Close() error {
 	if closer, ok := e.Reader.(io.Closer); ok {
 		return closer.Close()
 	}

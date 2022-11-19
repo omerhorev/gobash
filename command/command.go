@@ -1,4 +1,4 @@
-package cmd
+package command
 
 var (
 	DefaultExecUnitPriority = 100

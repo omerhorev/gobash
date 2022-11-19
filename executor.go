@@ -3,9 +3,10 @@ package gobash
 import (
 	"io"
 	"os"
+	"sync"
 
 	"github.com/omerhorev/gobash/ast"
-	"github.com/omerhorev/gobash/cmd"
+	"github.com/omerhorev/gobash/command"
 	"github.com/omerhorev/gobash/utils"
 
 	"github.com/pkg/errors"
@@ -64,10 +65,10 @@ type ExecutorSettings struct {
 // The key differences are:
 // - commands: The Executor supports special commands that connect to a Golang method. Use RegisterCommand to add such commands.
 type Executor struct {
-	Settings     ExecutorSettings // Settings for the executor
-	ExecEnv      *ExecEnv         // The current execution environment (env-vars, open files, etc)
-	Commands     []cmd.Command    // The current registered command
-	astNodeStack []ast.Node       // the current ast node stack
+	Settings     ExecutorSettings  // Settings for the executor
+	ExecEnv      *ExecEnv          // The current execution environment (env-vars, open files, etc)
+	Commands     []command.Command // The current registered command
+	astNodeStack []ast.Node        // the current ast node stack
 }
 
 // Creates a new executor with settings. The newly created Executor has no
@@ -76,7 +77,7 @@ type Executor struct {
 func NewExecutor(settings ExecutorSettings) *Executor {
 	executor := &Executor{
 		Settings:     settings,
-		Commands:     []cmd.Command{},
+		Commands:     []command.Command{},
 		ExecEnv:      newExecEnv(),
 		astNodeStack: []ast.Node{},
 	}
@@ -102,9 +103,22 @@ func (e *Executor) Run(program *ast.Program) error {
 //
 // For example, add all the default commands:
 //
-//	e.AddCommands(cmd.Default...)
-func (e *Executor) AddCommands(commands ...cmd.Command) {
+//	e.AddCommands(command.Default...)
+func (e *Executor) AddCommands(commands ...command.Command) {
 	e.Commands = append(e.Commands, commands...)
+}
+
+// Sets the stdin of the executor. If the reader is also an io.Closer, it uses
+// the reader's close method. Otherwise, a no-op Closer is used.
+func (e *Executor) SetStdin(r io.Reader) {
+	var rc io.Reader = nil
+	if c, ok := r.(io.ReadCloser); ok {
+		rc = c
+	} else {
+		rc = io.NopCloser(r)
+	}
+
+	e.ExecEnv.Files[0] = &utils.ErrorReadWriterErrW{Reader: rc}
 }
 
 // Sets the stdout of the executor. If the writer is also an io.Closer, it uses
@@ -133,7 +147,7 @@ func (e *Executor) SetStderr(w io.Writer) {
 	e.ExecEnv.Files[2] = utils.ErrorReadWriterErrR{Writer: wc}
 }
 
-func (e *Executor) getCommand(word string) (cmd.Command, error) {
+func (e *Executor) getCommand(word string) (command.Command, error) {
 	for _, command := range e.Commands {
 		if command.Match(word) {
 			return command, nil
@@ -230,23 +244,32 @@ func (e *Executor) executePipe(node *ast.Pipe, env *ExecEnv) (int, error) {
 	}
 
 	// setup stdin, stdout and stderr
-	_r := e.ExecEnv.Stdin()
+	_r := io.NopCloser(e.ExecEnv.Stdin())
+	wg := sync.WaitGroup{}
 
 	for i := 0; i < len(node.Commands)-1; i++ {
 		n := node.Commands[i]
 
 		r, w := io.Pipe()
 
-		go func(reader io.Reader) {
-			e.executeNodeOverrideStdInOut(n, env, reader, w)
-			w.Close()
-		}(_r)
+		wg.Add(1)
+		go func(reader io.ReadCloser, writer io.Writer) {
+			e.executeNodeOverrideStdInOut(n, env, reader, writer)
+			reader.Close()
+
+			wg.Done()
+		}(_r, w)
 
 		_r = r
 	}
 
 	n := node.Commands[len(node.Commands)-1]
-	return e.executeNodeOverrideStdInOut(n, env, _r, e.ExecEnv.Stdout())
+	ret, err := e.executeNodeOverrideStdInOut(n, env, _r, e.ExecEnv.Stdout())
+	_r.Close()
+
+	wg.Wait()
+
+	return ret, err
 }
 
 func (e *Executor) executeSimpleCommand(node *ast.SimpleCommand, env *ExecEnv) (int, error) {
@@ -289,7 +312,7 @@ func (e *Executor) executeSimpleCommand(node *ast.SimpleCommand, env *ExecEnv) (
 	return cmd.Execute(append([]string{node.Word}, node.Args...), cmdEnv), nil
 }
 
-func (e *Executor) createCommandEnv(node *ast.SimpleCommand, env *ExecEnv) *cmd.Env {
+func (e *Executor) createCommandEnv(node *ast.SimpleCommand, env *ExecEnv) *command.Env {
 	filesWithoutClose := map[int]io.ReadWriter{}
 	for fd, f := range env.Files {
 		filesWithoutClose[fd] = f
@@ -300,7 +323,7 @@ func (e *Executor) createCommandEnv(node *ast.SimpleCommand, env *ExecEnv) *cmd.
 		envVars[k] = v
 	}
 
-	return &cmd.Env{
+	return &command.Env{
 		Files:    filesWithoutClose,
 		Env:      envVars,
 		OpenFunc: e.openFileFunc(),
@@ -309,11 +332,11 @@ func (e *Executor) createCommandEnv(node *ast.SimpleCommand, env *ExecEnv) *cmd.
 }
 
 func (e *Executor) executeNodeOverrideStdInOut(node ast.Node, env *ExecEnv, in io.Reader, out io.Writer) (int, error) {
-	envCopy := *env
+	envCopy := env.New()
 	envCopy.Files[0] = &utils.ErrorReadWriterErrW{Reader: in}
 	envCopy.Files[1] = &utils.ErrorReadWriterErrR{Writer: out}
 
-	return e.executeNode(node, &envCopy)
+	return e.executeNode(node, envCopy)
 }
 
 func (e *Executor) getIORedirectFile(redirection *ast.IORedirection, env *ExecEnv) (io.ReadWriteCloser, error) {
@@ -415,7 +438,7 @@ func (e *Executor) HandleError(err error) error {
 func (e *Executor) error(err error) (retErr error) {
 	if err != nil {
 		if str := err.Error(); str != "" {
-			_, retErr = e.ExecEnv.Stderr().Write([]byte(str))
+			_, retErr = e.ExecEnv.Stderr().Write([]byte(str + "\n"))
 		}
 	}
 

@@ -1,4 +1,4 @@
-package cmd
+package command
 
 var (
 	// like /bin/true

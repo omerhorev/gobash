@@ -5,8 +5,6 @@ import (
 	"fmt"
 )
 
-var errUnterminatedQuotedString = errors.New("unterminated quoted string")
-
 type SyntaxError struct{ Err error }
 
 func newSyntaxError(err error) SyntaxError {

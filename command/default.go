@@ -1,4 +1,4 @@
-package cmd
+package command
 
 // All the default command
 var Default = []Command{

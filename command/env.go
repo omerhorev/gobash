@@ -1,4 +1,4 @@
-package cmd
+package command
 
 // like /bin/env without flags and command execution
 var EnvCmd = &SimpleMatchCommand{

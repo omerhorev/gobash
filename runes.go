@@ -19,6 +19,11 @@ func isApostrophe(r rune) bool {
 	return r == '\''
 }
 
+// Returns whether the character is an backslash.
+func isBackslash(r rune) bool {
+	return r == '\\'
+}
+
 // Returns whether the character is a quotation mark U+0022.
 func isQuotationMark(r rune) bool {
 	return r == '"'
@@ -68,4 +73,9 @@ func isUnderscore(r rune) bool {
 // Returns whether the rune is an equal sign U+003D.
 func isEqualSign(r rune) bool {
 	return r == '='
+}
+
+// clean escape sequences from the string
+func evalEscape(s string) (string, error) {
+	return s, nil
 }

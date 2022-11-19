@@ -50,6 +50,12 @@ func (p *Parser) Error() error {
 	return p.err
 }
 
+// Returns the generated AST as a program node to be used by the executor
+// This method can be used only after calling the Parse method
+func (p *Parser) Program() *ast.Program {
+	return p.AST().(*ast.Program)
+}
+
 // Return the generated AST after the parse. This method can be used only after calling
 // the Parse method
 func (p *Parser) AST() ast.Node {
@@ -471,3 +477,55 @@ func (p *Parser) assignmentWord() (string, string, bool) {
 
 	return "", "", false
 }
+
+// func (p *Parser) expandAll() (ast.Node, bool) {
+// 	b := p.backup()
+
+// 	t := NewTokenizerShort(p.current().Value)
+
+// 	tokens, err := t.ReadAll()
+// 	if err != nil {
+// 		p.restore(b)
+// 		return nil, false
+// 	}
+
+// 	p2 := NewParser(tokens, p.Settings)
+// 	p2.Parse()
+
+// 	// b := p.backup()
+
+// 	// TODO: expansion
+
+// 	n := ast.NewString()
+
+// 	nextIsBackslash := false
+
+// 	v := p.current().Value
+// 	for _, r := range v {
+// 		if nextIsBackslash {
+// 			if r == 'n' {
+// 				r = '\n'
+// 			}
+
+// 			if r == 'r' {
+// 				r = '\r'
+// 			}
+
+// 			if r == ' ' {
+// 				r = ' '
+// 			}
+
+// 			nextIsBackslash = false
+// 		}
+
+// 		if isBackslash(r) {
+// 			nextIsBackslash = true
+// 		} else {
+// 			n.Value = n.Value + string(r)
+// 		}
+// 	}
+
+// 	// p.restore(b)
+
+// 	return n, true
+// }
