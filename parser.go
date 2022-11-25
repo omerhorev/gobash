@@ -1,11 +1,12 @@
 package gobash
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
 	"github.com/omerhorev/gobash/ast"
-	"github.com/pkg/errors"
+	"github.com/omerhorev/gobash/rdp"
 )
 
 // Represents settings for the Parser
@@ -17,20 +18,19 @@ var parserDefaultSettings = ParserSettings{}
 type Parser struct {
 	Settings ParserSettings
 
-	tokens       []*Token
-	currentIndex int
-	err          error
-	node         ast.Node
+	rdp  rdp.RDP[*Token, TokenIdentifier]
+	node ast.Node
 }
 
 // Creates a new parser with settings.
 func NewParser(tokens []*Token, settings ParserSettings) *Parser {
 	return &Parser{
-		tokens:       tokens,
-		currentIndex: 0,
-		Settings:     settings,
-		err:          nil,
-		node:         nil,
+		rdp: rdp.RDP[*Token, TokenIdentifier]{
+			Tokens: tokens,
+		},
+
+		Settings: settings,
+		node:     nil,
 	}
 }
 
@@ -47,7 +47,10 @@ func (p *Parser) Parse() error {
 
 // Return errors from the parsing process.
 func (p *Parser) Error() error {
-	return p.err
+	if rdp.IsSyntaxError(p.rdp.Error()) {
+		return newSyntaxError(p.rdp.Error().(rdp.SyntaxError).Unwrap())
+	}
+	return p.rdp.Error()
 }
 
 // Returns the generated AST as a program node to be used by the executor
@@ -62,77 +65,77 @@ func (p *Parser) AST() ast.Node {
 	return p.node
 }
 
-func (p *Parser) error(format string, args ...any) {
-	p.err = newSyntaxError(errors.Errorf(format, args...))
-}
+// func (p *Parser) error(format string, args ...any) {
+// 	p.rdp.Error() = newSyntaxError(errors.Errorf(format, args...))
+// }
 
-func (p *Parser) current() *Token {
-	return p.tokens[p.currentIndex]
-}
+// func (p *Parser) current() *Token {
+// 	return p.tokens[p.rdp.CurrentIndex]
+// }
 
-func (p *Parser) prev() *Token {
-	return p.tokens[p.currentIndex-1]
-}
+// func (p *Parser) prev() *Token {
+// 	return p.tokens[p.rdp.CurrentIndex-1]
+// }
 
-func (p *Parser) consume() {
-	p.currentIndex++
-}
+// func (p *Parser) consume() {
+// 	p.rdp.CurrentIndex++
+// }
 
-func (p *Parser) backup() int {
-	return p.currentIndex
-}
+// func (p *Parser) backup() int {
+// 	return p.rdp.CurrentIndex
+// }
 
-func (p *Parser) restore(index int) {
-	p.currentIndex = index
-}
+// func (p *Parser) restore(index int) {
+// 	p.rdp.CurrentIndex = index
+// }
 
-func (p *Parser) check(terminal ...TokenIdentifier) bool {
-	for _, t := range terminal {
-		if p.current().Identifier == t {
-			return true
-		}
-	}
+// func (p *Parser) check(terminal ...TokenIdentifier) bool {
+// 	for _, t := range terminal {
+// 		if p.rdp.Current().Identifier == t {
+// 			return true
+// 		}
+// 	}
 
-	return false
-}
+// 	return false
+// }
 
-func (p *Parser) accept(terminal ...TokenIdentifier) bool {
-	if p.err != nil {
-		return false
-	}
+// func (p *Parser) accept(terminal ...TokenIdentifier) bool {
+// 	if p.rdp.Error() != nil {
+// 		return false
+// 	}
 
-	if p.check(terminal...) {
-		p.consume()
-		return true
-	}
+// 	if p.check(terminal...) {
+// 		p.rdp.Consume()
+// 		return true
+// 	}
 
-	return false
-}
+// 	return false
+// }
 
-func (p *Parser) expect(identifier TokenIdentifier) bool {
-	if !p.accept(identifier) {
-		found := p.current().Identifier
-		if p.current().Identifier == tokenIdentifierWord ||
-			p.current().Identifier == tokenIdentifierAssignmentWord {
-			found = TokenIdentifier(p.current().Value)
-		}
+// func (p *Parser) expect(identifier TokenIdentifier) bool {
+// 	if !p.rdp.Accept(identifier) {
+// 		found := p.rdp.Current().Identifier
+// 		if p.rdp.Current().Identifier == tokenIdentifierWord ||
+// 			p.rdp.Current().Identifier == tokenIdentifierAssignmentWord {
+// 			found = TokenIdentifier(p.rdp.Current().Value)
+// 		}
 
-		p.error("expected %s but found %s", identifier, found)
-		return false
-	}
+// 		p.rdp.SetError(fmt.Errorf("expected %s but found %s", identifier, found))
+// 		return false
+// 	}
 
-	return true
-}
+// 	return true
+// }
 
 func (p *Parser) parse() error {
-	b := p.backup()
+	b := p.rdp.Backup()
 
 	program, _ := p.program()
 
-	if !p.expect(tokenIdentifierEOF) {
-		p.restore(b)
+	if !p.rdp.Expect(tokenIdentifierEOF) {
+		p.rdp.Restore(b)
 
-		return p.err
+		return p.rdp.Error()
 	}
 
 	p.node = program
@@ -143,11 +146,11 @@ func (p *Parser) parse() error {
 func (p *Parser) program() (*ast.Program, bool) {
 	p.linebreak()
 
-	b := p.backup()
+	b := p.rdp.Backup()
 	program := ast.NewProgram()
 
 	if nodes, ok := p.completeCommands(); !ok {
-		p.restore(b)
+		p.rdp.Restore(b)
 	} else {
 		program.Commands = nodes
 	}
@@ -156,11 +159,11 @@ func (p *Parser) program() (*ast.Program, bool) {
 }
 
 func (p *Parser) completeCommands() (nodes []ast.Node, ok bool) {
-	b := p.backup()
+	b := p.rdp.Backup()
 
 	nodes, ok2 := p.completeCommand()
 	if !ok2 {
-		p.restore(b)
+		p.rdp.Restore(b)
 		return nil, false
 	}
 
@@ -176,18 +179,18 @@ func (p *Parser) completeCommands() (nodes []ast.Node, ok bool) {
 
 // this is a merge between complete_command and list
 func (p *Parser) completeCommand() ([]ast.Node, bool) {
-	b := p.backup()
+	b := p.rdp.Backup()
 
 	node, ok := p.andOr()
 	if !ok {
-		p.restore(b)
+		p.rdp.Restore(b)
 		return nil, false
 	}
 
-	if p.accept(tokenIdentifierSemicolon) {
+	if p.rdp.Accept(tokenIdentifierSemicolon) {
 		// do nothing, just a semicolon
 	} else {
-		if p.accept(tokenIdentifierAnd) {
+		if p.rdp.Accept(tokenIdentifierAnd) {
 			node = ast.NewBackground(node)
 		}
 	}
@@ -202,11 +205,11 @@ func (p *Parser) completeCommand() ([]ast.Node, bool) {
 }
 
 func (p *Parser) andOr() (node ast.Node, ok bool) {
-	b := p.backup()
+	b := p.rdp.Backup()
 
 	pipe, found := p.pipeline()
 	if !found {
-		p.restore(b)
+		p.rdp.Restore(b)
 		return nil, false
 	}
 
@@ -231,11 +234,11 @@ func (p *Parser) andOr() (node ast.Node, ok bool) {
 
 // derived from the and_or grammar rule
 func (p *Parser) andOrBinaryType() (BinaryType ast.BinaryType, ok bool) {
-	if p.accept(tokenIdentifierDAnd) {
+	if p.rdp.Accept(tokenIdentifierDAnd) {
 		return ast.BinaryTypeAnd, true
 	}
 
-	if p.accept(tokenIdentifierDPipe) {
+	if p.rdp.Accept(tokenIdentifierDPipe) {
 		return ast.BinaryTypeOr, true
 	}
 
@@ -245,13 +248,13 @@ func (p *Parser) andOrBinaryType() (BinaryType ast.BinaryType, ok bool) {
 // this represents both the pipeline and pipeline_sequence syntax because
 // it can be simplified if not using a recursion
 func (p *Parser) pipeline() (ast.Node, bool) {
-	b := p.backup()
+	b := p.rdp.Backup()
 
 	pipe := ast.NewPipe()
 
 	cmd, ok2 := p.command()
 	if !ok2 {
-		p.restore(b)
+		p.rdp.Restore(b)
 		return nil, false
 	}
 
@@ -260,15 +263,15 @@ func (p *Parser) pipeline() (ast.Node, bool) {
 	// don't use recursion because we don't want more nodes in the AST. instead
 	// just loop through the pipes
 	for {
-		b2 := p.backup()
-		if !p.accept(tokenIdentifierPipe) {
-			p.restore(b2)
+		b2 := p.rdp.Backup()
+		if !p.rdp.Accept(tokenIdentifierPipe) {
+			p.rdp.Restore(b2)
 			break
 		}
 
 		cmd, ok2 := p.command()
 		if !ok2 {
-			p.restore(b2)
+			p.rdp.Restore(b2)
 			break
 		}
 
@@ -285,17 +288,17 @@ func (p *Parser) pipeline() (ast.Node, bool) {
 
 func (p *Parser) command() (ast.Node, bool) {
 	// the first word of a command
-	b := p.backup()
-	upgraded := p.current().tryUpgradeToReservedWord()
+	b := p.rdp.Backup()
+	upgraded := p.rdp.Current().tryUpgradeToReservedWord()
 
-	not := p.accept(tokenIdentifierBang)
+	not := p.rdp.Accept(tokenIdentifierBang)
 
 	cmdNode, ok := p.simpleCommand()
 	if !ok {
-		p.restore(b)
+		p.rdp.Restore(b)
 		// restore the upgraded token, if it was upgraded
 		if upgraded {
-			p.current().Identifier = tokenIdentifierWord
+			p.rdp.Current().Identifier = tokenIdentifierWord
 		}
 
 		return nil, false
@@ -326,11 +329,11 @@ func (p *Parser) simpleCommand() (node *ast.SimpleCommand, ok bool) {
 }
 
 func (p *Parser) cmdPrefix(cmd *ast.SimpleCommand) (ok bool) {
-	b := p.backup()
+	b := p.rdp.Backup()
 
 	if !p.ioRedirect(cmd) {
 		if k, v, ok := p.assignmentWord(); !ok {
-			p.restore(b)
+			p.rdp.Restore(b)
 			return false
 		} else {
 			cmd.AddAssignment(k, v)
@@ -343,21 +346,21 @@ func (p *Parser) cmdPrefix(cmd *ast.SimpleCommand) (ok bool) {
 }
 
 func (p *Parser) cmdWord(cmd *ast.SimpleCommand) bool {
-	if !p.check(tokenIdentifierWord) {
+	if !p.rdp.Check(tokenIdentifierWord) {
 		return false
 	}
 
-	cmd.Word = p.current().Value
-	p.consume()
+	cmd.Word = p.rdp.Current().Value
+	p.rdp.Consume()
 
 	return true
 }
 
 func (p *Parser) cmdSuffix(cmd *ast.SimpleCommand) (ok bool) {
-	b := p.backup()
+	b := p.rdp.Backup()
 
 	if !p.ioRedirectOrArg(cmd) {
-		p.restore(b)
+		p.rdp.Restore(b)
 		return false
 	}
 
@@ -367,65 +370,65 @@ func (p *Parser) cmdSuffix(cmd *ast.SimpleCommand) (ok bool) {
 }
 
 func (p *Parser) ioRedirectOrArg(cmd *ast.SimpleCommand) bool {
-	b := p.backup()
+	b := p.rdp.Backup()
 
 	if p.ioRedirect(cmd) {
 		return true
 	}
 
-	if p.accept(tokenIdentifierWord) {
-		cmd.AddArgument(p.prev().Value)
+	if p.rdp.Accept(tokenIdentifierWord) {
+		cmd.AddArgument(p.rdp.Prev().Value)
 		return true
 	}
 
-	p.restore(b)
+	p.rdp.Restore(b)
 	return false
 }
 
 func (p *Parser) cmdName(cmd *ast.SimpleCommand) bool {
 	// TODO:
 
-	cmd.Word = p.current().Value
+	cmd.Word = p.rdp.Current().Value
 
-	return p.accept(tokenIdentifierWord)
+	return p.rdp.Accept(tokenIdentifierWord)
 }
 
 func (p *Parser) ioRedirect(cmd *ast.SimpleCommand) (ok bool) {
-	b := p.backup()
+	b := p.rdp.Backup()
 
 	a := &ast.IORedirection{}
 	var fdSet *int = nil
 
-	if p.accept(tokenIdentifierIONumber) {
-		fd, _ := strconv.Atoi(p.prev().Value)
+	if p.rdp.Accept(tokenIdentifierIONumber) {
+		fd, _ := strconv.Atoi(p.rdp.Prev().Value)
 		fdSet = &fd
 	}
 
 	fdAsserted := 0
-	if p.accept(tokenIdentifierLess, tokenIdentifierLessAnd) { // <
+	if p.rdp.Accept(tokenIdentifierLess, tokenIdentifierLessAnd) { // <
 		fdAsserted = 0
-	} else if p.accept(tokenIdentifierGreat, tokenIdentifierDGreat, tokenIdentifierGreatAnd, tokenIdentifierClobber) {
+	} else if p.rdp.Accept(tokenIdentifierGreat, tokenIdentifierDGreat, tokenIdentifierGreatAnd, tokenIdentifierClobber) {
 		fdAsserted = 1
-	} else if p.accept(tokenIdentifierLessGreat) {
+	} else if p.rdp.Accept(tokenIdentifierLessGreat) {
 		// nothing
 	} else {
-		p.restore(b)
+		p.rdp.Restore(b)
 		return false
 	}
 
-	a.Mode = ast.IORedirectionMode(p.prev().Value)
+	a.Mode = ast.IORedirectionMode(p.rdp.Prev().Value)
 
 	if a.Mode == ast.IORedirectionModeInputFd ||
 		a.Mode == ast.IORedirectionModeOutputFd {
-		if fd, err := strconv.Atoi(p.current().Value); err != nil {
-			p.error("bad fd number")
-			p.restore(b)
+		if fd, err := strconv.Atoi(p.rdp.Current().Value); err != nil {
+			p.rdp.SetError(errors.New("bad fd number"))
+			p.rdp.Restore(b)
 			return false
 		} else {
 			a.Value = fd
 		}
 	} else {
-		a.Value = p.current().Value
+		a.Value = p.rdp.Current().Value
 	}
 
 	to := fdAsserted
@@ -436,7 +439,7 @@ func (p *Parser) ioRedirect(cmd *ast.SimpleCommand) (ok bool) {
 	a.Fd = to
 	cmd.Redirects = append(cmd.Redirects, a)
 
-	p.consume()
+	p.rdp.Consume()
 
 	return true
 }
@@ -447,14 +450,14 @@ func (p *Parser) linebreak() bool {
 	return true
 }
 
-func (s *Parser) newlineList() bool {
+func (p *Parser) newlineList() bool {
 	// read at least one newline
-	if !s.accept(tokenIdentifierNewline) {
+	if !p.rdp.Accept(tokenIdentifierNewline) {
 		return false
 	}
 
 	for {
-		if !s.accept(tokenIdentifierNewline) {
+		if !p.rdp.Accept(tokenIdentifierNewline) {
 			break
 		}
 	}
@@ -465,12 +468,12 @@ func (s *Parser) newlineList() bool {
 // in the grammar this is a terminal. it will be represented
 // here as a non-terminal to parse context depended information
 func (p *Parser) assignmentWord() (string, string, bool) {
-	if p.current().tryUpgradeToAssignmentWord() { // rule 7b
-		v := p.current().Value
+	if p.rdp.Current().tryUpgradeToAssignmentWord() { // rule 7b
+		v := p.rdp.Current().Value
 		i := strings.IndexRune(v, '=')
 		key := v[:i]
 		value := v[i+1:]
-		p.consume()
+		p.rdp.Consume()
 
 		return key, value, true
 	}
@@ -479,20 +482,20 @@ func (p *Parser) assignmentWord() (string, string, bool) {
 }
 
 // func (p *Parser) expandAll() (ast.Node, bool) {
-// 	b := p.backup()
+// 	b := p.rdp.Backup()
 
-// 	t := NewTokenizerShort(p.current().Value)
+// 	t := NewTokenizerShort(p.rdp.Current().Value)
 
 // 	tokens, err := t.ReadAll()
 // 	if err != nil {
-// 		p.restore(b)
+// 		p.rdp.Restore(b)
 // 		return nil, false
 // 	}
 
 // 	p2 := NewParser(tokens, p.Settings)
 // 	p2.Parse()
 
-// 	// b := p.backup()
+// 	// b := p.rdp.Backup()
 
 // 	// TODO: expansion
 
@@ -500,7 +503,7 @@ func (p *Parser) assignmentWord() (string, string, bool) {
 
 // 	nextIsBackslash := false
 
-// 	v := p.current().Value
+// 	v := p.rdp.Current().Value
 // 	for _, r := range v {
 // 		if nextIsBackslash {
 // 			if r == 'n' {
@@ -525,7 +528,7 @@ func (p *Parser) assignmentWord() (string, string, bool) {
 // 		}
 // 	}
 
-// 	// p.restore(b)
+// 	// p.rdp.Restore(b)
 
 // 	return n, true
 // }

@@ -37,12 +37,20 @@ var (
 	tokenIdentifierClobber        = TokenIdentifier(">|")
 )
 
+func (t TokenIdentifier) Accept(token *Token) bool {
+	return token.Is(t)
+}
+
+func (t TokenIdentifier) String() string {
+	return string(t)
+}
+
 // The Token Represents a part of the string produced by the Tokenizer.
 // The Token is used in the grammatical processing of shell expressions and is later
 // transformed into AST by the Parser.
 type Token struct {
 	Value      string          // The actual value of the token
-	Identifier TokenIdentifier // The type of token
+	Identifier TokenIdentifier // The type of token, also a RDP terminal
 }
 
 // Returns whether a token is of specific type.
@@ -108,6 +116,10 @@ func (t *Token) tryUpgradeToReservedWord() bool {
 	}
 
 	return false
+}
+
+func (t *Token) String() string {
+	return t.Value
 }
 
 func newTokenFromString(value string, delimitedBy rune) *Token {
