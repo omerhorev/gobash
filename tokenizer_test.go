@@ -3,7 +3,7 @@ package gobash
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTokenOperators(t *testing.T) {
@@ -53,6 +53,18 @@ func TestTokenQuotes(t *testing.T) {
 	// assert.ErrorIs(t, err, ErrUnterminatedQuotedString)
 }
 
+func TestTokenExpressions(t *testing.T) {
+	testTokens(t, "`x`", "`x`")
+	testTokens(t, "`x `", "`x `")
+	testTokens(t, "`x y`", "`x y`")
+	testTokens(t, "`x 'y'`", "`x 'y'`")
+	testTokens(t, "`x 'y\"y\"'`", "`x 'y\"y\"'`")
+
+	// nested
+	testTokens(t, "`\\`x\\``", "`\\`x\\``")
+	testTokens(t, "`abc \\`a \\\\`b\\\\` c\\``", "`abc \\`a \\\\`b\\\\` c\\``")
+}
+
 func TestTokenMultiLine(t *testing.T) {
 	testTokens(t, `ls y
 cat x`, "ls", "y", "\n", "cat", "x")
@@ -68,12 +80,12 @@ func testTokens(t *testing.T, line string, tokensStr ...string) {
 	tokenizer := NewTokenizerShort(line)
 
 	actualTokens, err := tokenizer.ReadAll()
-	assert.NoError(t, err)
-	assert.Equal(t, len(tokensStr)+1, len(actualTokens))
+	require.NoError(t, err)
+	require.Equal(t, len(tokensStr)+1, len(actualTokens))
 
 	for i := range tokensStr {
-		assert.Equal(t, tokensStr[i], actualTokens[i].Value)
+		require.Equal(t, tokensStr[i], actualTokens[i].Value)
 	}
 
-	assert.True(t, actualTokens[len(tokensStr)].IsEOF())
+	require.True(t, actualTokens[len(tokensStr)].IsEOF())
 }

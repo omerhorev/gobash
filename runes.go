@@ -19,9 +19,14 @@ func isApostrophe(r rune) bool {
 	return r == '\''
 }
 
-// Returns whether the character is an backslash.
-func isBackslash(r rune) bool {
-	return r == '\\'
+// Returns whether the character is a backtick or a dollar sign.
+func isExpressionStart(r rune) bool {
+	return r == '$' || r == '`'
+}
+
+// Returns whether the character is a dollar sign.
+func isDollarSign(r rune) bool {
+	return r == '$'
 }
 
 // Returns whether the character is a quotation mark U+0022.
@@ -75,7 +80,48 @@ func isEqualSign(r rune) bool {
 	return r == '='
 }
 
-// clean escape sequences from the string
-func evalEscape(s string) (string, error) {
-	return s, nil
+func nextUnescaped(str string, expected rune) int {
+	isBackslashed := false
+	isApostrophed := false
+	isQuotationMarked := false
+
+	preserveMeaning := func() bool {
+		return isBackslashed || isApostrophed || isQuotationMarked
+	}
+
+	for i, r := range str {
+		if !preserveMeaning() && expected == r {
+			return i
+		}
+
+		if !(isBackslashed || isApostrophed) && isEscape(r) {
+			isBackslashed = true
+			continue
+		}
+
+		if !preserveMeaning() && !isQuotationMarked && isQuotationMark(r) {
+			isQuotationMarked = true
+			continue
+		}
+
+		if !isBackslashed && isQuotationMarked && isQuotationMark(r) {
+			isQuotationMarked = false
+			continue
+		}
+
+		if !preserveMeaning() && !isApostrophed && isApostrophe(r) {
+			isApostrophed = true
+			continue
+		}
+
+		if isApostrophed && isApostrophe(r) {
+			isApostrophed = false
+			continue
+		}
+
+		// add to word
+		isBackslashed = false
+	}
+
+	return -1
 }

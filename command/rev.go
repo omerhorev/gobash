@@ -17,7 +17,7 @@ var Rev = &SimpleMatchCommand{
 			scanner := bufio.NewScanner(r)
 
 			for scanner.Scan() {
-				if _, err := e.Print(utils.ReverseString(scanner.Text())); err != nil {
+				if _, err := e.Println(utils.ReverseString(scanner.Text())); err != nil {
 					return err
 				}
 			}

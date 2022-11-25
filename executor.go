@@ -253,8 +253,9 @@ func (e *Executor) executePipe(node *ast.Pipe, env *ExecEnv) (int, error) {
 		r, w := io.Pipe()
 
 		wg.Add(1)
-		go func(reader io.ReadCloser, writer io.Writer) {
+		go func(reader io.ReadCloser, writer io.WriteCloser) {
 			e.executeNodeOverrideStdInOut(n, env, reader, writer)
+			writer.Close()
 			reader.Close()
 
 			wg.Done()
@@ -302,6 +303,15 @@ func (e *Executor) executeSimpleCommand(node *ast.SimpleCommand, env *ExecEnv) (
 		}
 	}
 
+	args := []string{}
+	for _, nodeArg := range node.Args {
+		if result, err := e.expandArg(nodeArg); err != nil {
+			return retErr, err
+		} else {
+			args = append(args, result)
+		}
+	}
+
 	cmdEnv := e.createCommandEnv(node, newEnv)
 
 	if e.isRunInBackground() {
@@ -309,7 +319,7 @@ func (e *Executor) executeSimpleCommand(node *ast.SimpleCommand, env *ExecEnv) (
 		return retErr, errors.New("unimplemented")
 	}
 
-	return cmd.Execute(append([]string{node.Word}, node.Args...), cmdEnv), nil
+	return cmd.Execute(append([]string{node.Word}, args...), cmdEnv), nil
 }
 
 func (e *Executor) createCommandEnv(node *ast.SimpleCommand, env *ExecEnv) *command.Env {
@@ -443,4 +453,11 @@ func (e *Executor) error(err error) (retErr error) {
 	}
 
 	return
+}
+
+func (e *Executor) expandArg(arg string) (string, error) {
+	// exp := NewExpander()
+	// return "", nil
+	return arg, nil
+	// return exp.ExpandCommandSubstitution(arg)
 }

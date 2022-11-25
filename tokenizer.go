@@ -206,6 +206,17 @@ func (t *Tokenizer) readToken() (*Token, error) {
 			continue
 		}
 
+		if !preserveMeaning() && isExpressionStart(r) {
+			t.reader.UnreadRune()
+
+			expr, err := t.readExpression()
+			if err != nil {
+				return nil, err
+			}
+
+			tokenStr += expr
+		}
+
 		if isApostrophed && isApostrophe(r) {
 			isApostrophed = false
 			tokenStr += string(r)
@@ -271,10 +282,102 @@ func (t *Tokenizer) readToken() (*Token, error) {
 	}
 
 	if isApostrophed || isQuotationMarked {
-		return nil, newSyntaxError(errors.New("unterminated error string"))
+		return nil, newSyntaxError(errors.New("unterminated quoted string"))
 	}
 
 	return newTokenFromString(tokenStr, utf8.RuneError), nil
+}
+
+func (t *Tokenizer) readExpression() (string, error) {
+	r, _, err := t.reader.ReadRune()
+	if err != nil {
+		return "", err
+	}
+
+	if r == '`' {
+		result, err := t.readUntilUnescaped("`")
+		if err != nil {
+			return "", err
+		}
+
+		return "`" + result, nil
+	}
+
+	return "", errors.New("unexpected expression")
+}
+
+func (t *Tokenizer) readUntilUnescaped(suffix string) (string, error) {
+	if t.err != nil {
+		return "", t.err
+	}
+
+	isBackslashed := false
+	isApostrophed := false
+	isQuotationMarked := false
+
+	preserveMeaning := func() bool {
+		return isBackslashed || isApostrophed || isQuotationMarked
+	}
+
+	str := ""
+
+	for {
+		r, _, err := t.reader.ReadRune()
+		if err == io.EOF {
+			return "", io.ErrUnexpectedEOF
+		} else if err != nil {
+			return "", err
+		}
+
+		if !preserveMeaning() && strings.HasSuffix(str+string(r), suffix) {
+			return str, nil
+		}
+
+		if !(isBackslashed || isApostrophed) && isEscape(r) {
+			isBackslashed = true
+			str += string(r)
+			continue
+		}
+
+		if !preserveMeaning() && !isQuotationMarked && isQuotationMark(r) {
+			isQuotationMarked = true
+			str += string(r)
+			continue
+		}
+
+		if !isBackslashed && isQuotationMarked && isQuotationMark(r) {
+			isQuotationMarked = false
+			str += string(r)
+			continue
+		}
+
+		if !preserveMeaning() && !isApostrophed && isApostrophe(r) {
+			isApostrophed = true
+			str += string(r)
+			continue
+		}
+
+		if !preserveMeaning() && isExpressionStart(r) {
+			t.reader.UnreadRune()
+
+			expr, err := t.readExpression()
+			if err != nil {
+				return "", err
+			}
+
+			str += expr
+		}
+
+		if isApostrophed && isApostrophe(r) {
+			isApostrophed = false
+			str += string(r)
+			continue
+		}
+
+		// add to word
+		isBackslashed = false
+		str += string(r)
+	}
 }
 
 func canBeUsedInOperator(token string) bool {

@@ -35,7 +35,7 @@ func TestExecutorPipe(t *testing.T) {
 		},
 	}))
 
-	require.Equal(t, "c b a", b.String())
+	require.Equal(t, "c b a\nd\n", b.String())
 
 	require.Error(t, executor.Run(&ast.Program{Commands: []ast.Node{&ast.Pipe{}}}))
 
@@ -43,6 +43,7 @@ func TestExecutorPipe(t *testing.T) {
 		Commands: []ast.Node{
 			&ast.Pipe{
 				Commands: []ast.Node{
+					&ast.SimpleCommand{Word: "echo"},
 					&ast.SimpleCommand{Word: "echo"},
 					&ast.SimpleCommand{Word: "echo"},
 				},
@@ -139,7 +140,7 @@ func TestExecutorIORedirection(t *testing.T) {
 	require.Contains(t, files, "output/3")
 	require.Equal(t, "1\n2\n", files["output/1"].String())
 	require.Equal(t, "fd_io_redirect\n", files["output/2"].String())
-	require.Equal(t, "321", files["output/3"].String())
+	require.Equal(t, "321\n", files["output/3"].String())
 
 	progErrorIORedirectionFile := &ast.Program{
 		Commands: []ast.Node{
