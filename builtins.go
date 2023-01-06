@@ -3,29 +3,34 @@ package gobash
 import (
 	"errors"
 
-	"github.com/omerhorev/gobash/ast"
+	"github.com/omerhorev/gobash/command"
 )
 
-func builtinCd(e *Executor, node *ast.SimpleCommand) error {
-	args := append([]string{node.Word}, node.Args...) // like command args
+type cdBuiltinCommand struct {
+	*Executor
+}
 
+func (c *cdBuiltinCommand) Match(word string) bool { return word == "cd" && !c.Executor.Settings.NoCd }
+func (c *cdBuiltinCommand) Execute(args []string, env *command.Env) int {
 	path := "/"
 	if len(args) == 1 {
-		if val := e.ExecEnv.GetParam("HOME"); val != "" {
+		if val := c.Executor.ExecEnv.GetParam("HOME"); val != "" {
 			path = val
+		} else {
+			env.Error(errors.New("HOME not set"))
+			return 1
 		}
 	} else if len(args) == 2 {
 		path = args[1]
 	} else {
-		return errors.New("too many arguments")
+		env.Error(errors.New("too many arguments"))
+		return 1
 	}
 
-	newPath, err := e.cdFunc()(path)
-	if err != nil {
-		return err
+	if err := c.Executor.Cd(path); err != nil {
+		env.Error(err)
+		return 1
 	}
 
-	e.ExecEnv.WorkingDirectory = newPath
-
-	return nil
+	return 0
 }

@@ -12,11 +12,10 @@ var (
 
 type Terminal[T any] interface {
 	Accept(T) bool
-	String() string
 }
 
 type Token interface {
-	String() string
+	// String() string
 }
 
 // Recursive descent parser with backtracking support
@@ -94,7 +93,7 @@ func (r *RDP[T, TR]) Accept(expected ...TR) bool {
 
 func (r *RDP[T, TR]) Expect(terminal TR) bool {
 	if !terminal.Accept(r.Current()) {
-		r.SetError(newSyntaxError(fmt.Errorf("expected %s but found %s", terminal, r.Current())))
+		r.SetError(newSyntaxError(fmt.Errorf("expected %v but found %v", terminal, r.Current())))
 		return false
 	}
 

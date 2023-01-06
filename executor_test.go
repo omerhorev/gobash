@@ -23,13 +23,25 @@ func TestExecutorPipe(t *testing.T) {
 		Commands: []ast.Node{
 			&ast.Pipe{
 				Commands: []ast.Node{
-					&ast.SimpleCommand{Word: "echo", Args: []string{"a", "b", "c"}},
-					&ast.SimpleCommand{Word: "rev"},
+					&ast.SimpleCommand{
+						Word: ast.NewExpr(ast.NewString("echo")),
+						Args: []*ast.Expr{
+							ast.NewExpr(ast.NewString("a")),
+							ast.NewExpr(ast.NewString("b")),
+							ast.NewExpr(ast.NewString("c")),
+						},
+					},
+					&ast.SimpleCommand{Word: ast.NewExpr(ast.NewString("rev"))},
 				},
 			},
 			&ast.Pipe{
 				Commands: []ast.Node{
-					&ast.SimpleCommand{Word: "echo", Args: []string{"d"}},
+					&ast.SimpleCommand{
+						Word: ast.NewExpr(ast.NewString("echo")),
+						Args: []*ast.Expr{
+							ast.NewExpr(ast.NewString("d")),
+						},
+					},
 				},
 			},
 		},
@@ -43,9 +55,9 @@ func TestExecutorPipe(t *testing.T) {
 		Commands: []ast.Node{
 			&ast.Pipe{
 				Commands: []ast.Node{
-					&ast.SimpleCommand{Word: "echo"},
-					&ast.SimpleCommand{Word: "echo"},
-					&ast.SimpleCommand{Word: "echo"},
+					&ast.SimpleCommand{Word: ast.NewExpr(ast.NewString("echo"))},
+					&ast.SimpleCommand{Word: ast.NewExpr(ast.NewString("echo"))},
+					&ast.SimpleCommand{Word: ast.NewExpr(ast.NewString("echo"))},
 				},
 			},
 		},
@@ -61,7 +73,7 @@ func TestExecutorCommands(t *testing.T) {
 
 	prog := &ast.Program{
 		Commands: []ast.Node{
-			&ast.SimpleCommand{Word: "unknown"},
+			&ast.SimpleCommand{Word: ast.NewExpr(ast.NewString("unknown"))},
 		},
 	}
 
@@ -103,33 +115,33 @@ func TestExecutorIORedirection(t *testing.T) {
 	executor.Run(&ast.Program{
 		Commands: []ast.Node{
 			&ast.SimpleCommand{
-				Word: "echo",
-				Args: []string{"1"},
+				Word: ast.NewExpr(ast.NewString("echo")),
+				Args: []*ast.Expr{ast.NewExpr(ast.NewString("1"))},
 				Redirects: []*ast.IORedirection{
-					{Fd: 1, Mode: ast.IORedirectionModeOutput, Value: "output/1"},
+					{Fd: 1, Mode: ast.IORedirectionModeOutput, Value: ast.NewExprStr("output/1")},
 				},
 			},
 			&ast.SimpleCommand{
-				Word: "echo",
-				Args: []string{"2"},
+				Word: ast.NewExpr(ast.NewString("echo")),
+				Args: []*ast.Expr{ast.NewExpr(ast.NewString("2"))},
 				Redirects: []*ast.IORedirection{
-					{Fd: 1, Mode: ast.IORedirectionModeOutputAppend, Value: "output/1"},
+					{Fd: 1, Mode: ast.IORedirectionModeOutputAppend, Value: ast.NewExprStr("output/1")},
 				},
 			},
 			&ast.SimpleCommand{
-				Word: "echo",
-				Args: []string{"fd_io_redirect"},
+				Word: ast.NewExpr(ast.NewString("echo")),
+				Args: []*ast.Expr{ast.NewExpr(ast.NewString("fd_io_redirect"))},
 				Redirects: []*ast.IORedirection{
-					{Fd: 10, Mode: ast.IORedirectionModeOutputAppend, Value: "output/2"},
-					{Fd: 1, Mode: ast.IORedirectionModeOutputFd, Value: 10},
+					{Fd: 10, Mode: ast.IORedirectionModeOutputAppend, Value: ast.NewExprStr("output/2")},
+					{Fd: 1, Mode: ast.IORedirectionModeOutputFd, Value: ast.NewExprStr("10")},
 				},
 			},
 			&ast.SimpleCommand{
-				Word: "rev",
+				Word: ast.NewExpr(ast.NewString("rev")),
 				Redirects: []*ast.IORedirection{
-					{Fd: 10, Mode: ast.IORedirectionModeInput, Value: "input/1"},
-					{Fd: 0, Mode: ast.IORedirectionModeInputFd, Value: 10},
-					{Fd: 1, Mode: ast.IORedirectionModeOutput, Value: "output/3"},
+					{Fd: 10, Mode: ast.IORedirectionModeInput, Value: ast.NewExprStr("input/1")},
+					{Fd: 0, Mode: ast.IORedirectionModeInputFd, Value: ast.NewExprStr("10")},
+					{Fd: 1, Mode: ast.IORedirectionModeOutput, Value: ast.NewExprStr("output/3")},
 				},
 			},
 		},
@@ -144,16 +156,16 @@ func TestExecutorIORedirection(t *testing.T) {
 
 	progErrorIORedirectionFile := &ast.Program{
 		Commands: []ast.Node{
-			&ast.SimpleCommand{Word: "true", Redirects: []*ast.IORedirection{
-				{Fd: 1, Mode: ast.IORedirectionModeInput, Value: "missing_file"},
+			&ast.SimpleCommand{Word: ast.NewExprStr("true"), Redirects: []*ast.IORedirection{
+				{Fd: 1, Mode: ast.IORedirectionModeInput, Value: ast.NewExprStr("missing_file")},
 			}},
 		},
 	}
 
 	progErrorIORedirectionFd := &ast.Program{
 		Commands: []ast.Node{
-			&ast.SimpleCommand{Word: "true", Redirects: []*ast.IORedirection{
-				{Fd: 1, Mode: ast.IORedirectionModeInputFd, Value: 22},
+			&ast.SimpleCommand{Word: ast.NewExprStr("true"), Redirects: []*ast.IORedirection{
+				{Fd: 1, Mode: ast.IORedirectionModeInputFd, Value: ast.NewExprStr("22")},
 			}},
 		},
 	}
@@ -181,8 +193,8 @@ func TestExecutorBinary(t *testing.T) {
 	executor.Run(&ast.Program{
 		Commands: []ast.Node{
 			&ast.Binary{
-				Left:  makeSimpleCommand("true"),
-				Right: makeSimpleCommand("echo", "1"),
+				Left:  &ast.SimpleCommand{Word: ast.NewExprStr("true")},
+				Right: &ast.SimpleCommand{Word: ast.NewExprStr("echo"), Args: []*ast.Expr{ast.NewExprStr("1")}},
 				Type:  ast.BinaryTypeAnd,
 			},
 		},
@@ -194,8 +206,8 @@ func TestExecutorBinary(t *testing.T) {
 	executor.Run(&ast.Program{
 		Commands: []ast.Node{
 			&ast.Binary{
-				Left:  makeSimpleCommand("false"),
-				Right: makeSimpleCommand("echo", "1"),
+				Left:  &ast.SimpleCommand{Word: ast.NewExprStr("false")},
+				Right: &ast.SimpleCommand{Word: ast.NewExprStr("echo"), Args: []*ast.Expr{ast.NewExprStr("1")}},
 				Type:  ast.BinaryTypeAnd,
 			},
 		},
@@ -207,8 +219,8 @@ func TestExecutorBinary(t *testing.T) {
 	executor.Run(&ast.Program{
 		Commands: []ast.Node{
 			&ast.Binary{
-				Left:  makeSimpleCommand("true"),
-				Right: makeSimpleCommand("echo", "1"),
+				Left:  &ast.SimpleCommand{Word: ast.NewExprStr("true")},
+				Right: &ast.SimpleCommand{Word: ast.NewExprStr("echo"), Args: []*ast.Expr{ast.NewExprStr("1")}},
 				Type:  ast.BinaryTypeOr,
 			},
 		},
@@ -220,8 +232,8 @@ func TestExecutorBinary(t *testing.T) {
 	executor.Run(&ast.Program{
 		Commands: []ast.Node{
 			&ast.Binary{
-				Left:  makeSimpleCommand("false"),
-				Right: makeSimpleCommand("echo", "1"),
+				Left:  &ast.SimpleCommand{Word: ast.NewExprStr("false")},
+				Right: &ast.SimpleCommand{Word: ast.NewExprStr("echo"), Args: []*ast.Expr{ast.NewExprStr("1")}},
 				Type:  ast.BinaryTypeOr,
 			},
 		},
@@ -229,6 +241,51 @@ func TestExecutorBinary(t *testing.T) {
 
 	require.Equal(t, "1\n", b.String())
 	b.Reset()
+}
+
+func TestExecutorFieldSplitting(t *testing.T) {
+	executor := createTestExecutor()
+	bufferStdout := bytes.Buffer{}
+	bufferStderr := bytes.Buffer{}
+	executor.SetStdout(&bufferStdout)
+	executor.SetStderr(&bufferStderr)
+
+	prog1 := &ast.Program{Commands: []ast.Node{
+		&ast.SimpleCommand{
+			Word: ast.NewExprStr("echo"),
+			Args: []*ast.Expr{
+				ast.NewExpr(testBacktickEcho("1")),
+			},
+		},
+	}}
+
+	require.NoError(t, executor.Run(prog1))
+}
+
+func TestExecutorExpander(t *testing.T) {
+	executor := createTestExecutor()
+	bufferStdout := bytes.Buffer{}
+	bufferStderr := bytes.Buffer{}
+	executor.SetStdout(&bufferStdout)
+	executor.SetStderr(&bufferStderr)
+
+	//
+	// X=`echo 1` e`echo ch`o h`echo ell`o
+	//
+	prog1 := &ast.Program{Commands: []ast.Node{
+		&ast.SimpleCommand{
+			Assignments: map[string]*ast.Expr{
+				"X": ast.NewExpr(testBacktickEcho("1")),
+			},
+			Word: ast.NewExpr(ast.NewString("e"), testBacktickEcho("ch"), ast.NewString("o")),
+			Args: []*ast.Expr{
+				ast.NewExpr(ast.NewString("h"), testBacktickEcho("ell"), ast.NewString("o")),
+			},
+		},
+	}}
+
+	require.NoError(t, executor.Run(prog1))
+	require.Equal(t, "hello\n", bufferStdout.String())
 }
 
 func TestExecutorBuiltinCd(t *testing.T) {
@@ -252,26 +309,30 @@ func TestExecutorBuiltinCd(t *testing.T) {
 	}
 
 	prog1 := &ast.Program{Commands: []ast.Node{
-		&ast.SimpleCommand{Word: "cd", Args: []string{"/tmp"}},
-		&ast.SimpleCommand{Word: "cd", Args: []string{"/"}},
-		&ast.SimpleCommand{Word: "cd", Args: []string{}},
+		&ast.SimpleCommand{Word: ast.NewExprStr("cd"), Args: []*ast.Expr{ast.NewExprStr("/tmp")}},
+		&ast.SimpleCommand{Word: ast.NewExprStr("cd"), Args: []*ast.Expr{ast.NewExprStr("/")}},
+		&ast.SimpleCommand{Word: ast.NewExprStr("cd"), Args: []*ast.Expr{ast.NewExprStr("")}},
 	}}
 
 	prog2 := &ast.Program{Commands: []ast.Node{
-		&ast.SimpleCommand{Word: "cd", Args: []string{"/bad"}},
+		&ast.SimpleCommand{Word: ast.NewExprStr("cd"), Args: []*ast.Expr{ast.NewExprStr("/bad")}},
 	}}
 
 	prog3 := &ast.Program{Commands: []ast.Node{
-		&ast.SimpleCommand{Word: "cd", Args: []string{"/", "/"}},
+		&ast.SimpleCommand{Word: ast.NewExprStr("cd"), Args: []*ast.Expr{ast.NewExprStr("/"), ast.NewExprStr("/")}},
 	}}
 
-	executor.Settings.StopOnBuiltinError = true
 	require.NoError(t, executor.Run(prog1))
-	require.ErrorIs(t, executor.Run(prog2), newBuiltinError(errors.New("")))
-	require.ErrorIs(t, executor.Run(prog3), newBuiltinError(errors.New("")))
+	require.Equal(t, "cd: unknown path ", bufferStderr.String())
+	bufferStderr.Reset()
 
-	executor.Settings.StopOnBuiltinError = false
 	require.NoError(t, executor.Run(prog2))
+	require.Equal(t, "cd: unknown path /bad", bufferStderr.String())
+	bufferStderr.Reset()
+
+	require.NoError(t, executor.Run(prog3))
+	require.Equal(t, "cd: too many arguments", bufferStderr.String())
+	bufferStderr.Reset()
 }
 
 func TestExecutorEnv(t *testing.T) {
@@ -284,7 +345,7 @@ func TestExecutorEnv(t *testing.T) {
 	executor.ExecEnv.SetParam("C", "D")
 
 	prog1 := &ast.Program{Commands: []ast.Node{
-		&ast.SimpleCommand{Word: "env", Assignments: map[string]string{"A": "B", "C": "E"}},
+		&ast.SimpleCommand{Word: ast.NewExprStr("env"), Assignments: map[string]*ast.Expr{"A": ast.NewExprStr("B"), "C": ast.NewExprStr("E")}},
 	}}
 
 	require.NoError(t, executor.Run(prog1))
@@ -307,9 +368,16 @@ func createTestExecutor() *Executor {
 	return e
 }
 
-func makeSimpleCommand(name string, args ...string) *ast.SimpleCommand {
-	return &ast.SimpleCommand{
-		Word: name,
-		Args: args,
+func testBacktickEcho(args ...string) ast.Node {
+	args2 := []*ast.Expr{}
+	for _, arg := range args {
+		args2 = append(args2, ast.NewExprStr(arg))
+	}
+
+	return &ast.Backtick{
+		Node: &ast.SimpleCommand{
+			Word: ast.NewExprStr("echo"),
+			Args: args2,
+		},
 	}
 }

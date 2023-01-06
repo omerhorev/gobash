@@ -21,7 +21,6 @@ var InteractiveDefaultSettings ShellSettings = ShellSettings{
 		OpenFunc:                 nil, // use default os.OpenFile
 		CdFunc:                   nil, // use default fs based implementation
 		DisableFileOpen:          false,
-		StopOnBuiltinError:       false,
 		StopOnIORedirectionError: false,
 		StopOnUnknownCommand:     false,
 	},
@@ -151,7 +150,6 @@ func (s *Shell) handleError(err error) error {
 	}
 
 	if errors.Is(err, SyntaxError{}) ||
-		errors.Is(err, BuiltinError{}) ||
 		errors.Is(err, IoRedirectionError{}) {
 		return nil
 	} else {

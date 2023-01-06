@@ -6,14 +6,14 @@ package ast
 //   - `<file`
 type SimpleCommand struct {
 	// Arguments, including command name (arg[0])
-	Args []string
+	Args []*Expr
 
 	// Stores pre-command assignments
-	Assignments map[string]string
+	Assignments map[string]*Expr
 
 	// Stores the command word if provided
 	// TODO: Support name
-	Word string
+	Word *Expr
 
 	// Stores redirects
 	Redirects []*IORedirection // redirects may
@@ -21,10 +21,10 @@ type SimpleCommand struct {
 
 func NewSimpleCommand() *SimpleCommand {
 	return &SimpleCommand{
-		Assignments: make(map[string]string),
-		Word:        "",
+		Assignments: make(map[string]*Expr),
+		Word:        nil,
 		Redirects:   []*IORedirection{},
-		Args:        []string{},
+		Args:        []*Expr{},
 	}
 }
 
@@ -32,11 +32,11 @@ func (s *SimpleCommand) AddRedirect(fd int, io *IORedirection) {
 	s.Redirects[fd] = io
 }
 
-func (s *SimpleCommand) AddAssignment(key, value string) {
+func (s *SimpleCommand) AddAssignment(key string, value *Expr) {
 	s.Assignments[key] = value
 }
 
-func (s *SimpleCommand) AddArgument(value string) {
+func (s *SimpleCommand) AddArgument(value *Expr) {
 	s.Args = append(s.Args, value)
 }
 
@@ -56,7 +56,7 @@ var (
 type IORedirection struct {
 	Fd    int
 	Mode  IORedirectionMode
-	Value any // If Dup redirect mode the type is int, otherwise string
+	Value *Expr
 }
 
 // Returns whether the redirection mode is a duplication of another fd
@@ -65,7 +65,7 @@ func (m IORedirectionMode) IsDup() bool {
 		m == IORedirectionModeInputFd
 }
 
-// Returns whether the file needs to be closed: the mode is dup and the value is "-"
-func (io IORedirection) IsClose() bool {
-	return io.Mode.IsDup() && io.Value == "-"
-}
+// // Returns whether the file needs to be closed: the mode is dup and the value is "-"
+// func (io IORedirection) IsClose() bool {
+// 	return io.Mode.IsDup() && io.To == "-"
+// }

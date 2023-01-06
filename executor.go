@@ -1,8 +1,12 @@
 package gobash
 
 import (
+	"bufio"
+	"bytes"
+	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/omerhorev/gobash/ast"
@@ -12,6 +16,13 @@ import (
 	"github.com/pkg/errors"
 )
 
+// internally used to represent io redirections
+type ioRedirection struct {
+	To   string
+	Fd   int
+	Mode ast.IORedirectionMode
+}
+
 // Will be used instead of os.OpenFile when opening files by the shell
 type OpenFileFunc func(path string, flag int, perm os.FileMode) (io.ReadWriteCloser, error)
 
@@ -19,7 +30,8 @@ type OpenFileFunc func(path string, flag int, perm os.FileMode) (io.ReadWriteClo
 type ChangeDirFunc func(path string) (newPath string, err error)
 
 const (
-	retErr = 127 // the return code when error happens
+	defaultIFS = "\n\t "
+	retErr     = 127 // the return code when error happens
 )
 
 // Settings for Executor
@@ -46,10 +58,6 @@ type ExecutorSettings struct {
 	// Note: this only affect file openings, no the redirection subsystem.
 	// The command `echo 1>&2` would not raise an error.
 	DisableFileOpen bool
-
-	// Exit the execution when a builtin error happens
-	// (see 2.8.1 Consequences of Shell Errors)
-	StopOnBuiltinError bool
 
 	// Exit the execution when an IO redirection error happens
 	// (see 2.8.1 Consequences of Shell Errors)
@@ -147,29 +155,31 @@ func (e *Executor) SetStderr(w io.Writer) {
 	e.ExecEnv.Files[2] = utils.ErrorReadWriterErrR{Writer: wc}
 }
 
-func (e *Executor) getCommand(word string) (command.Command, error) {
-	for _, command := range e.Commands {
-		if command.Match(word) {
+// Change the shell's working directory.
+// This method will use the CdFunc in the settings if one exists.
+func (e *Executor) Cd(path string) error {
+	cdFunc := e.cdFunc()
+
+	newPath, err := cdFunc(path)
+	if err != nil {
+		return err
+	}
+
+	e.ExecEnv.WorkingDirectory = newPath
+
+	return nil
+}
+
+func (e *Executor) getCommand(name string) (command.Command, error) {
+	commands := append(e.Commands, &cdBuiltinCommand{Executor: e})
+
+	for _, command := range commands {
+		if command.Match(name) {
 			return command, nil
 		}
 	}
 
-	return nil, newUnknownCommandError(word)
-}
-
-func (e *Executor) executeBuiltin(node *ast.SimpleCommand, env *ExecEnv) (bool, error) {
-	var err error = nil
-	if node.Word == "cd" && !e.Settings.NoCd {
-		err = builtinCd(e, node)
-	} else {
-		return false, nil
-	}
-
-	if err != nil {
-		return true, newBuiltinError(err)
-	}
-
-	return true, nil
+	return nil, newUnknownCommandError(name)
 }
 
 func (e *Executor) executeNode(node ast.Node, env *ExecEnv) (ret int, err error) {
@@ -184,8 +194,14 @@ func (e *Executor) executeNode(node ast.Node, env *ExecEnv) (ret int, err error)
 		ret, err = e.executePipe(n, env)
 	case *ast.SimpleCommand:
 		ret, err = e.executeSimpleCommand(n, env)
+	case *ast.String:
+		ret, err = e.executeString(n, env)
+	case *ast.Expr:
+		ret, err = e.executeExpr(n, env)
+	case *ast.Backtick:
+		ret, err = e.executeBacktick(n, env)
 	default:
-		ret, err = retErr, errors.New("unsupported execution")
+		ret, err = retErr, fmt.Errorf("unsupported execution %T", n)
 	}
 
 	e.astNodeStack = e.astNodeStack[:len(e.astNodeStack)-1]
@@ -208,6 +224,50 @@ func (e *Executor) isRunInBackground() bool {
 	}
 
 	return false
+}
+
+func (e *Executor) executeExpr(node *ast.Expr, env *ExecEnv) (int, error) {
+	b := bytes.Buffer{}
+
+	for _, n := range node.Nodes {
+		b.Reset()
+
+		if _, err := e.executeNodeOverrideStdInOut(n, env, env.Stdin(), &b); err != nil {
+			return retErr, err
+		}
+
+		if _, ok := n.(ast.DoubleQuote); !ok {
+			sb := bufio.NewWriter(env.Stdout())
+
+			s := e.newFieldSplitScanner(&b)
+			more := s.Scan()
+			for more {
+				sb.WriteString(s.Text())
+
+				more = s.Scan()
+
+				if more {
+					sb.WriteRune(' ')
+				}
+			}
+
+			sb.Flush()
+		} else {
+			io.Copy(env.Stdout(), &b)
+		}
+	}
+
+	return 0, nil
+}
+
+func (e *Executor) executeString(node *ast.String, env *ExecEnv) (int, error) {
+	env.Stdout().Write([]byte(node.Value))
+
+	return 0, nil
+}
+
+func (e *Executor) executeBacktick(node *ast.Backtick, env *ExecEnv) (int, error) {
+	return e.executeNode(node.Node, env)
 }
 
 func (e *Executor) executeBackground(node *ast.Background, env *ExecEnv) (int, error) {
@@ -274,26 +334,14 @@ func (e *Executor) executePipe(node *ast.Pipe, env *ExecEnv) (int, error) {
 }
 
 func (e *Executor) executeSimpleCommand(node *ast.SimpleCommand, env *ExecEnv) (int, error) {
-	if executed, err := e.executeBuiltin(node, env); executed {
-		if err != nil {
-			return retErr, err
-		} else {
-			return 0, nil
-		}
-	}
-
-	cmd, err := e.getCommand(node.Word)
+	name, args, assignments, redirects, err := e.expandSimpleCommand(node)
 	if err != nil {
 		return retErr, err
 	}
 
 	newEnv := env.New()
 
-	for k, v := range node.Assignments {
-		newEnv.Params[k] = v
-	}
-
-	for _, v := range node.Redirects {
+	for _, v := range redirects {
 		if file, err := e.getIORedirectFile(v, newEnv); err != nil {
 			return retErr, err
 		} else {
@@ -303,26 +351,26 @@ func (e *Executor) executeSimpleCommand(node *ast.SimpleCommand, env *ExecEnv) (
 		}
 	}
 
-	args := []string{}
-	for _, nodeArg := range node.Args {
-		if result, err := e.expandArg(nodeArg); err != nil {
-			return retErr, err
-		} else {
-			args = append(args, result)
-		}
+	cmdEnv := e.createCommandEnv(newEnv)
+	for k, v := range assignments {
+		cmdEnv.Env[k] = v
 	}
-
-	cmdEnv := e.createCommandEnv(node, newEnv)
+	cmdEnv.Args = append([]string{name}, args...)
 
 	if e.isRunInBackground() {
 		// TODO: run in background
 		return retErr, errors.New("unimplemented")
 	}
 
-	return cmd.Execute(append([]string{node.Word}, args...), cmdEnv), nil
+	cmd, err := e.getCommand(name)
+	if err != nil {
+		return retErr, err
+	}
+
+	return cmd.Execute(cmdEnv.Args, cmdEnv), nil
 }
 
-func (e *Executor) createCommandEnv(node *ast.SimpleCommand, env *ExecEnv) *command.Env {
+func (e *Executor) createCommandEnv(env *ExecEnv) *command.Env {
 	filesWithoutClose := map[int]io.ReadWriter{}
 	for fd, f := range env.Files {
 		filesWithoutClose[fd] = f
@@ -337,7 +385,6 @@ func (e *Executor) createCommandEnv(node *ast.SimpleCommand, env *ExecEnv) *comm
 		Files:    filesWithoutClose,
 		Env:      envVars,
 		OpenFunc: e.openFileFunc(),
-		Args:     node.Args,
 	}
 }
 
@@ -349,9 +396,13 @@ func (e *Executor) executeNodeOverrideStdInOut(node ast.Node, env *ExecEnv, in i
 	return e.executeNode(node, envCopy)
 }
 
-func (e *Executor) getIORedirectFile(redirection *ast.IORedirection, env *ExecEnv) (io.ReadWriteCloser, error) {
+func (e *Executor) getIORedirectFile(redirection *ioRedirection, env *ExecEnv) (io.ReadWriteCloser, error) {
 	if redirection.Mode == ast.IORedirectionModeInputFd || redirection.Mode == ast.IORedirectionModeOutputFd {
-		fd := redirection.Value.(int) // value must be int at this point
+		fd, err := strconv.Atoi(redirection.To)
+		if err != nil {
+			return nil, newIORedirectionError(errors.Errorf("bad fd number %s", redirection.To))
+		}
+
 		file, ok := env.Files[fd]
 		if !ok {
 			return nil, newIORedirectionError(errors.Errorf("%d: bad file descriptor", fd))
@@ -364,7 +415,7 @@ func (e *Executor) getIORedirectFile(redirection *ast.IORedirection, env *ExecEn
 		}
 
 	} else {
-		path := redirection.Value.(string)
+		path := redirection.To
 		flags := 0
 
 		switch redirection.Mode {
@@ -426,14 +477,6 @@ func (e *Executor) HandleError(err error) error {
 		}
 	}
 
-	if IsBuiltinError(err) {
-		if e.Settings.StopOnBuiltinError {
-			return err
-		} else {
-			return nil
-		}
-	}
-
 	if IsUnknownCommandError(err) {
 		if e.Settings.StopOnUnknownCommand {
 			return err
@@ -455,9 +498,72 @@ func (e *Executor) error(err error) (retErr error) {
 	return
 }
 
-func (e *Executor) expandArg(arg string) (string, error) {
-	// exp := NewExpander()
-	// return "", nil
-	return arg, nil
-	// return exp.ExpandCommandSubstitution(arg)
+func (e *Executor) expandSimpleCommand(node *ast.SimpleCommand) (command string, args []string, assignments map[string]string, redirects []*ioRedirection, err error) {
+	command = ""
+	args = []string{}
+	assignments = map[string]string{}
+	redirects = []*ioRedirection{}
+	var val string
+
+	command, err = e.expandExpr(node.Word)
+	if err != nil {
+		return
+	}
+
+	for k, v := range node.Assignments {
+		val, err = e.expandExpr(v)
+		if err != nil {
+			return
+		}
+
+		assignments[k] = val
+	}
+
+	for _, v := range node.Args {
+		val, err = e.expandExpr(v)
+		if err != nil {
+			return
+		}
+
+		args = append(args, val)
+	}
+
+	for _, v := range node.Redirects {
+		val, err = e.expandExpr(v.Value)
+		if err != nil {
+			return
+		}
+
+		redirects = append(redirects, &ioRedirection{
+			Fd:   v.Fd,
+			Mode: v.Mode,
+			To:   val,
+		})
+	}
+
+	return
+}
+
+func (e *Executor) expandExpr(node ast.Node) (string, error) {
+	b := bytes.Buffer{}
+	_, err := e.executeNodeOverrideStdInOut(node, e.ExecEnv, utils.Null, &b)
+	if err != nil {
+		return "", err
+	}
+
+	return b.String(), nil
+}
+
+func (e *Executor) newFieldSplitScanner(reader io.Reader) *bufio.Scanner {
+	return utils.NewRunesScanner(reader, e.getIFS())
+}
+
+func (e *Executor) getIFS() []rune {
+	s := e.ExecEnv.GetParamDefault("IFS", defaultIFS)
+	runes := []rune{}
+	for _, r := range s {
+		runes = append(runes, r)
+	}
+
+	return runes
 }

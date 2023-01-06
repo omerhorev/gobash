@@ -31,8 +31,6 @@ func TestParserErrors(t *testing.T) {
 	parserTest(t, "a\nb\nc")
 	parserTest(t, "\na\nb\n")
 	parserTest(t, "\n\na\nb;\n\n")
-
-	parserTestError(t, "ls 1<&a")
 	parserTestError(t, "ls |")
 	parserTestError(t, "ls &&&")
 	parserTestError(t, "ls &&")
@@ -50,65 +48,40 @@ ls&x;ls&
 				Left: &ast.Pipe{
 					Commands: []ast.Node{
 						&ast.SimpleCommand{
-							Word:        "'c'",
-							Assignments: map[string]string{},
+							Word: ast.NewExprStr("'c'"),
 							Redirects: []*ast.IORedirection{
 								{
 									Fd:    1,
 									Mode:  ast.IORedirectionModeOutput,
-									Value: "1",
+									Value: ast.NewExprStr("1"),
 								},
 							},
 						},
 						&ast.SimpleCommand{
-							Word: "d",
-							Assignments: map[string]string{
-								"A": "1",
+							Word: ast.NewExprStr("d"),
+							Assignments: map[string]*ast.Expr{
+								"A": ast.NewExprStr("1"),
 							},
 							Redirects: []*ast.IORedirection{
 								{
 									Fd:    4,
 									Mode:  ast.IORedirectionModeInputFd,
-									Value: 2,
+									Value: ast.NewExprStr("2"),
 								},
 							},
 						},
 					},
 				},
 				Right: &ast.Binary{
-					Left: &ast.SimpleCommand{
-						Word:        "c",
-						Assignments: map[string]string{},
-						Redirects:   []*ast.IORedirection{},
-					},
-					Right: &ast.SimpleCommand{
-						Word:        "y",
-						Assignments: map[string]string{},
-						Redirects:   []*ast.IORedirection{},
-					},
-					Type: ast.BinaryTypeOr,
+					Left:  &ast.SimpleCommand{Word: ast.NewExprStr("c")},
+					Right: &ast.SimpleCommand{Word: ast.NewExprStr("y")},
+					Type:  ast.BinaryTypeOr,
 				},
 				Type: ast.BinaryTypeAnd,
 			},
-			&ast.Background{
-				Child: &ast.SimpleCommand{
-					Word:        "ls",
-					Assignments: map[string]string{},
-					Redirects:   []*ast.IORedirection{},
-				},
-			},
-			&ast.SimpleCommand{
-				Word:        "x",
-				Assignments: map[string]string{},
-				Redirects:   []*ast.IORedirection{},
-			},
-			&ast.Background{
-				Child: &ast.SimpleCommand{
-					Word:        "ls",
-					Assignments: map[string]string{},
-					Redirects:   []*ast.IORedirection{},
-				},
-			},
+			&ast.Background{Child: &ast.SimpleCommand{Word: ast.NewExprStr("ls")}},
+			&ast.SimpleCommand{Word: ast.NewExprStr("x")},
+			&ast.Background{Child: &ast.SimpleCommand{Word: ast.NewExprStr("ls")}},
 		},
 	})
 }
@@ -117,18 +90,8 @@ func TestParserNot(t *testing.T) {
 	p := parseDefaultText(t, "x;! y")
 	requireNode(t, p.AST(), &ast.Program{
 		Commands: []ast.Node{
-			&ast.SimpleCommand{
-				Word:        "x",
-				Assignments: map[string]string{},
-				Redirects:   []*ast.IORedirection{},
-			},
-			&ast.Not{
-				Child: &ast.SimpleCommand{
-					Word:        "y",
-					Assignments: map[string]string{},
-					Redirects:   []*ast.IORedirection{},
-				},
-			},
+			&ast.SimpleCommand{Word: ast.NewExprStr("x")},
+			&ast.Not{Child: &ast.SimpleCommand{Word: ast.NewExprStr("y")}},
 		},
 	})
 }
@@ -140,18 +103,18 @@ func TestParserASTArguments(t *testing.T) {
 			&ast.Pipe{
 				Commands: []ast.Node{
 					&ast.SimpleCommand{
-						Word:        "x",
-						Assignments: map[string]string{"A": "1"},
-						Args:        []string{"a", "b", "c"},
+						Word:        ast.NewExprStr("x"),
+						Assignments: map[string]*ast.Expr{"A": ast.NewExprStr("1")},
+						Args:        []*ast.Expr{ast.NewExprStr("a"), ast.NewExprStr("b"), ast.NewExprStr("c")},
 					},
 					&ast.SimpleCommand{
-						Word: "y",
-						Args: []string{"a", "b", "c"},
+						Word: ast.NewExprStr("y"),
+						Args: []*ast.Expr{ast.NewExprStr("a"), ast.NewExprStr("b"), ast.NewExprStr("c")},
 						Redirects: []*ast.IORedirection{
 							{
 								Fd:    0,
 								Mode:  ast.IORedirectionModeInput,
-								Value: "1",
+								Value: ast.NewExprStr("1"),
 							},
 						},
 					},
@@ -167,59 +130,57 @@ func TestParserASTRedirects(t *testing.T) {
 	requireNode(t, p.AST(), &ast.Program{
 		Commands: []ast.Node{
 			&ast.SimpleCommand{
-				Word:        "x",
-				Assignments: map[string]string{},
+				Word: ast.NewExprStr("x"),
 				Redirects: []*ast.IORedirection{
 					{
 						Fd:    0,
 						Mode:  ast.IORedirectionModeInput,
-						Value: "1",
+						Value: ast.NewExprStr("1"),
 					},
 					{
 						Fd:    1,
 						Mode:  ast.IORedirectionModeOutput,
-						Value: "1",
+						Value: ast.NewExprStr("1"),
 					},
 					{
 						Fd:    2,
 						Mode:  ast.IORedirectionModeInput,
-						Value: "1",
+						Value: ast.NewExprStr("1"),
 					},
 					{
 						Fd:    3,
 						Mode:  ast.IORedirectionModeInputOutput,
-						Value: "1",
+						Value: ast.NewExprStr("1"),
 					},
 					{
 						Fd:    4,
 						Mode:  ast.IORedirectionModeOutputAppend,
-						Value: "1",
+						Value: ast.NewExprStr("1"),
 					},
 				},
 			},
 			&ast.SimpleCommand{
-				Word:        "",
-				Assignments: map[string]string{},
+				Word: nil,
 				Redirects: []*ast.IORedirection{
 					{
 						Fd:    0,
 						Mode:  ast.IORedirectionModeInputFd,
-						Value: 1,
+						Value: ast.NewExprStr("1"),
 					},
 					{
 						Fd:    1,
 						Mode:  ast.IORedirectionModeOutputFd,
-						Value: 1,
+						Value: ast.NewExprStr("1"),
 					},
 					{
 						Fd:    2,
 						Mode:  ast.IORedirectionModeOutputForce,
-						Value: "1",
+						Value: ast.NewExprStr("1"),
 					},
 					{
 						Fd:    10,
 						Mode:  ast.IORedirectionModeInput,
-						Value: "2",
+						Value: ast.NewExprStr("2"),
 					},
 				},
 			},

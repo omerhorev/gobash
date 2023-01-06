@@ -87,13 +87,19 @@ func (e *ExecEnv) New() *ExecEnv {
 }
 
 // GetParam retrieves the value of the parameter variable named by the key.
-// It returns the value, which will be empty if the variable is not present.
-func (e *ExecEnv) GetParam(key string) string {
+// It returns the value. If the value is not set defaultValue is returned
+func (e *ExecEnv) GetParamDefault(key string, defaultValue string) string {
 	if value, exists := e.Params[key]; exists {
 		return value
 	} else {
-		return ""
+		return defaultValue
 	}
+}
+
+// GetParam retrieves the value of the parameter variable named by the key.
+// It returns the value, which will be empty if the variable is not present.
+func (e *ExecEnv) GetParam(key string) string {
+	return e.GetParamDefault(key, "")
 }
 
 // SetParam sets the value of the parameter variable named as key

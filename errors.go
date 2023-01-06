@@ -55,31 +55,6 @@ func (err IoRedirectionError) Is(err2 error) bool {
 	return ok
 }
 
-type BuiltinError struct{ Err error }
-
-func IsBuiltinError(err error) bool {
-	return errors.Is(err, BuiltinError{})
-}
-
-func newBuiltinError(err error) BuiltinError {
-	return BuiltinError{
-		Err: err,
-	}
-}
-
-func (err BuiltinError) Error() string {
-	return "" // see 2.8.1 Consequences of Shell Errors
-}
-
-func (err BuiltinError) Unwrap() error {
-	return err.Err
-}
-
-func (err BuiltinError) Is(err2 error) bool {
-	_, ok := err2.(BuiltinError)
-	return ok
-}
-
 type UnknownCommandError struct{ Command string }
 
 func IsUnknownCommandError(err error) bool {

@@ -1,7 +1,6 @@
 package gobash
 
 import (
-	"errors"
 	"strconv"
 	"strings"
 
@@ -332,11 +331,11 @@ func (p *Parser) cmdPrefix(cmd *ast.SimpleCommand) (ok bool) {
 	b := p.rdp.Backup()
 
 	if !p.ioRedirect(cmd) {
-		if k, v, ok := p.assignmentWord(); !ok {
+		if k, word, ok := p.assignmentWord(); !ok {
 			p.rdp.Restore(b)
 			return false
 		} else {
-			cmd.AddAssignment(k, v)
+			cmd.AddAssignment(k, word)
 		}
 	}
 
@@ -350,7 +349,12 @@ func (p *Parser) cmdWord(cmd *ast.SimpleCommand) bool {
 		return false
 	}
 
-	cmd.Word = p.rdp.Current().Value
+	e := NewExpander(p.rdp.Current().Value)
+	if err := e.Parse(); err != nil {
+		return false
+	}
+
+	cmd.Word = e.Expr
 	p.rdp.Consume()
 
 	return true
@@ -377,7 +381,12 @@ func (p *Parser) ioRedirectOrArg(cmd *ast.SimpleCommand) bool {
 	}
 
 	if p.rdp.Accept(tokenIdentifierWord) {
-		cmd.AddArgument(p.rdp.Prev().Value)
+		e := NewExpander(p.rdp.Prev().Value)
+		if err := e.Parse(); err != nil {
+			return false
+		}
+
+		cmd.AddArgument(e.Expr)
 		return true
 	}
 
@@ -386,9 +395,12 @@ func (p *Parser) ioRedirectOrArg(cmd *ast.SimpleCommand) bool {
 }
 
 func (p *Parser) cmdName(cmd *ast.SimpleCommand) bool {
-	// TODO:
+	e := NewExpander(p.rdp.Current().Value)
+	if err := e.Parse(); err != nil {
+		return false
+	}
 
-	cmd.Word = p.rdp.Current().Value
+	cmd.Word = e.Expr
 
 	return p.rdp.Accept(tokenIdentifierWord)
 }
@@ -418,18 +430,7 @@ func (p *Parser) ioRedirect(cmd *ast.SimpleCommand) (ok bool) {
 
 	a.Mode = ast.IORedirectionMode(p.rdp.Prev().Value)
 
-	if a.Mode == ast.IORedirectionModeInputFd ||
-		a.Mode == ast.IORedirectionModeOutputFd {
-		if fd, err := strconv.Atoi(p.rdp.Current().Value); err != nil {
-			p.rdp.SetError(errors.New("bad fd number"))
-			p.rdp.Restore(b)
-			return false
-		} else {
-			a.Value = fd
-		}
-	} else {
-		a.Value = p.rdp.Current().Value
-	}
+	a.Value = ast.NewExprStr(p.rdp.Current().Value)
 
 	to := fdAsserted
 	if fdSet != nil {
@@ -467,7 +468,7 @@ func (p *Parser) newlineList() bool {
 
 // in the grammar this is a terminal. it will be represented
 // here as a non-terminal to parse context depended information
-func (p *Parser) assignmentWord() (string, string, bool) {
+func (p *Parser) assignmentWord() (string, *ast.Expr, bool) {
 	if p.rdp.Current().tryUpgradeToAssignmentWord() { // rule 7b
 		v := p.rdp.Current().Value
 		i := strings.IndexRune(v, '=')
@@ -475,10 +476,10 @@ func (p *Parser) assignmentWord() (string, string, bool) {
 		value := v[i+1:]
 		p.rdp.Consume()
 
-		return key, value, true
+		return key, ast.NewExprStr(value), true
 	}
 
-	return "", "", false
+	return "", nil, false
 }
 
 // func (p *Parser) expandAll() (ast.Node, bool) {

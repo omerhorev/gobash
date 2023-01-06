@@ -5,8 +5,8 @@ type String struct {
 	Value string
 }
 
-func NewString() *String {
+func NewString(value string) *String {
 	return &String{
-		Value: "",
+		Value: value,
 	}
 }
