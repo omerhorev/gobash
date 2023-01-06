@@ -98,13 +98,8 @@ func NewExecutor(settings ExecutorSettings) *Executor {
 // The program will be executed on the same Goroutine and will block until
 // it finishes execution.
 func (e *Executor) Run(program *ast.Program) error {
-	for _, node := range program.Commands {
-		if _, err := e.executeNode(node, e.ExecEnv); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	_, err := e.executeNode(program, e.ExecEnv)
+	return err
 }
 
 // Register a one or more new commands
@@ -200,6 +195,8 @@ func (e *Executor) executeNode(node ast.Node, env *ExecEnv) (ret int, err error)
 		ret, err = e.executeExpr(n, env)
 	case *ast.Backtick:
 		ret, err = e.executeBacktick(n, env)
+	case *ast.Program:
+		ret, err = e.executeProgram(n, env)
 	default:
 		ret, err = retErr, fmt.Errorf("unsupported execution %T", n)
 	}
@@ -213,6 +210,16 @@ func (e *Executor) executeNode(node ast.Node, env *ExecEnv) (ret int, err error)
 	}
 
 	return
+}
+
+func (e *Executor) executeProgram(node *ast.Program, env *ExecEnv) (int, error) {
+	for _, node := range node.Commands {
+		if _, err := e.executeNode(node, env); err != nil {
+			return retErr, err
+		}
+	}
+
+	return 0, nil
 }
 
 func (e *Executor) isRunInBackground() bool {

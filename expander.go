@@ -54,12 +54,12 @@ func (e *Expander) Parse() error {
 			break
 		}
 
-		if node, ok := e.string(); ok {
+		if node, ok := e.backtick(); ok {
 			expr.Nodes = append(expr.Nodes, node)
 			continue
 		}
 
-		if node, ok := e.backtick(); ok {
+		if node, ok := e.string(); ok {
 			expr.Nodes = append(expr.Nodes, node)
 			continue
 		}
@@ -91,14 +91,24 @@ func (e *Expander) backtick() (*ast.Backtick, bool) {
 
 	e.rdp.Consume()
 
-	e2 := NewExpander(s)
-	if err := e2.Parse(); err != nil {
-		e.rdp.SetError(err)
+	// e2 := NewExpander(s)
+	// if err := e2.Parse(); err != nil {
+	// 	e.rdp.SetError(err)
+	// 	return nil, false
+	// }
+
+	tokenizer := NewTokenizerShort(s)
+	tokens, err := tokenizer.ReadAll()
+	if err != nil {
+		return nil, false
+	}
+	parser := NewParserDefault(tokens)
+	if parser.Parse() != nil {
 		return nil, false
 	}
 
 	node := ast.NewBacktick()
-	node.Node = e2.Expr
+	node.Node = parser.Program()
 
 	return node, true
 }
